@@ -157,7 +157,6 @@ const setDefaultAddress = expressAsyncHandler(async (req, res) => {
     addresses: user.address,
   });
 });
-
 //// -------------------------------route => DELETE/v1/user/address/delete/:addressId----------------------------------------------
 ///* @desc   Delete a specific address
 ///? @access Private
@@ -179,15 +178,29 @@ const deleteAddress = expressAsyncHandler(async (req, res) => {
     throw new Error("Address not found");
   }
 
+  // Check if the address is the default address
+  const isDefaultAddress = address.isDefaultAddress;
+
   // Remove the address from the user's address array
   user.address.pull({ _id: addressId });
 
+  // If the deleted address was the default, set another address as the default
+  if (isDefaultAddress) {
+    if (user.address.length > 0) {
+      // Set the first remaining address as the new default
+      user.address[0].isDefaultAddress = true;
+    }
+  }
+
+  // Save the updated user information
   await user.save();
 
-  res
-    .status(200)
-    .json({ message: "Address deleted successfully", addresses: user.address });
+  res.status(200).json({
+    message: "Address deleted successfully",
+    addresses: user.address
+  });
 });
+
 
 export {
   getAddress,
