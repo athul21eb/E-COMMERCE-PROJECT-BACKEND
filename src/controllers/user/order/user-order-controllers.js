@@ -137,8 +137,10 @@ export const getUserOrderDetailsById = expressAsyncHandler(async (req, res) => {
     console.log(id);
     const order = await Order.findById(id.toString()).populate({
       path: "items.productId",
-      populate: { path: "brand" },
-      populate:{path:"category"}
+      populate:  [
+        { path: "brand" },
+        { path: "category" } // Assuming your Product model has a category field
+      ],
     });
 
     if (!order) {
