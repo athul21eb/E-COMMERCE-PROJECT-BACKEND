@@ -182,6 +182,7 @@ const updateBrandIsActive = expressAsyncHandler(async (req, res) => {
   }
 });
 
+
 ////-------------------------------route => DELETE/v1/admin/brand/delete-brand----------------------------------------------
 ///* @desc   Soft delete brand
 ///? @access Private

@@ -14,6 +14,7 @@ export const verifyUserJWT = (req, res, next) => {
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, async (err, decoded) => {
     if (err) {
       return res.status(403).json({ message: "Forbidden user " });
+      
     }
    
     if (decoded?.authInfo?.role === "user") {
@@ -33,9 +34,9 @@ export const verifyUserJWT = (req, res, next) => {
         return res.status(403).json({ message: "Forbidden user is blocked" });
       }
     } else {
-      res.status(403);
+     
 
-      return res.status(403).json({ message: "user is invalid" });
+      return res.status(403).json({ message: "user is invalid " });
     }
   });
 };

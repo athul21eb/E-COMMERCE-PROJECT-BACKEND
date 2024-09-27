@@ -13,7 +13,13 @@ const errorHandler = (err,req,res,next)=>{
     let statusCode = res.statusCode ===200? 500 :res.statusCode;
     let message = err.message||"internal Server Error";
 
-
+    if (err.name === "ValidationError") {
+        // Catch Mongoose validation errors
+       return res.status(400).json({
+          message: "Validation Error",
+          errors: Object.values(err.errors).map((errr) => errr.message),
+        });
+      }
 
     if(err.name ==="CastError" && err.kind ==="ObjectId"){
         statusCode = 404;
@@ -24,6 +30,8 @@ const errorHandler = (err,req,res,next)=>{
         statusCode = 400;
         message = 'Email   already in use ';
     }
+
+
 
 
 

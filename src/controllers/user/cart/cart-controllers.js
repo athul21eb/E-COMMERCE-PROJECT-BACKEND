@@ -24,11 +24,17 @@ const addToCart = expressAsyncHandler(async (req, res) => {
     throw new Error("Product not found");
   }
 
-  // Check stock availability
-  if (product.stock < quantity) {
-    res.status(400);
-    throw new Error("Insufficient stock");
-  }
+   // Check stock availability for the given size
+   const sizeStock = product.stock.find((item) => item.size === size);
+   if (!sizeStock) {
+     res.status(400);
+     throw new Error(`Size ${size} not available`);
+   }
+ 
+   if (sizeStock.stock < quantity) {
+     res.status(400);
+     throw new Error(`Insufficient stock for size ${size}. Available stock: ${sizeStock.stock}`);
+   }
 
   // Find or create cart
   let cart = await Cart.findOne({ user: userId });
@@ -76,6 +82,64 @@ const getToCart = expressAsyncHandler(async (req, res) => {
   }
 
   res.status(200).json({ message: "Cart retrieved successfully", cart });
+});
+
+
+// -------------------------------route => GET/v1/cart/get-cart----------------------------------------------
+///* @desc   Get user's cart and adjust item quantity if stock is limited
+///? @access Private
+
+const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
+  const userId = req.user.id;
+
+  // Find the cart with populated product and brand data
+  const cart = await Cart.findOne({ user: userId }).populate({
+    path: "items.productId",
+    populate:[ { path: "brand" },{path:"category"}],
+  });
+
+  if (!cart) {
+    return res.status(404).json({ message: "Cart not found" });
+  }
+
+  // Check stock and adjust item quantity if needed
+  let stockAdjusted = false;
+
+  cart.items = await Promise.all(
+    cart.items.map(async (item) => {
+      const product = await Product.findById(item.productId);
+
+      if (!product) {
+        return item; // Product not found, skip this item
+      }
+
+      const sizeStock = product.stock.find((stock) => stock.size === item.size);
+
+      if (!sizeStock) {
+        return item; // Size not found, skip this item
+      }
+
+      // If stock for this size is 1 or less than requested quantity, set item quantity to 1
+      if (sizeStock.stock === 1 || sizeStock.stock < item.quantity) {
+        item.quantity = 1; // Adjust the item quantity to 1
+        stockAdjusted = true;
+      }
+
+      return item;
+    })
+  );
+
+  // Save the cart if any adjustments were made
+  if (stockAdjusted) {
+    await cart.save();
+  }
+
+  // Respond with the updated cart
+  res.status(200).json({
+    message: "Cart retrieved successfully",
+    cart,
+    stockAdjusted: stockAdjusted ? "Some item quantities were adjusted to 1 due to limited stock" : "No changes to cart quantities",
+  });
 });
 
 // -------------------------------route => DELETE/v1/cart/remove-item/:productId----------------------------------------------
@@ -200,4 +264,4 @@ const clearCart = expressAsyncHandler(async (req, res) => {
   res.status(200).json({ message: "Cart cleared successfully", cart });
 });
 
-export { addToCart, getToCart, removeToCart, updateToCart, clearCart };
+export { addToCart, getToCart, removeToCart, updateToCart, clearCart ,getCartWithStockAdjustment};

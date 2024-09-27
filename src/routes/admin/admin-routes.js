@@ -4,6 +4,7 @@ import brandRouter from "./brand/brand-routes.js";
 import productRouter from "./products/products-routes.js";
 import customerRouter from "./customers/customers-router.js";
 import orderRouter from "./orders/admin-orders-routes.js";
+import bannerRouter from "./banner/banner-routes.js";
 
 const AdminRouter = Router();
 
@@ -30,6 +31,10 @@ AdminRouter.use('/customers',customerRouter);
 
 
 AdminRouter.use('/orders',orderRouter);
+
+////-------------------------------------Admin brand Routers--------------------------------
+
+AdminRouter.use('/banners',bannerRouter)
 
 
 

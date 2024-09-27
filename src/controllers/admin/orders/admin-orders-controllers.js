@@ -68,9 +68,11 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
   });
 
   const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
-    try {
+   
       const { id, itemId } = req.params;
       const { status } = req.body;
+
+     
   
       // Validate status
       if (!["Pending", "Shipped", "Delivered", "Cancelled"].includes(status)) {
@@ -93,18 +95,25 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
       const previousStatus = item.status;
       item.status = status;
   
-      // Check if the status was changed to "Cancelled"
-      if (status === "Cancelled" && previousStatus !== "Cancelled") {
-        // Find the product
-        const product = await Products.findById(item.productId);
-        if (!product) {
-          return res.status(404).json({ message: "Product not found" });
-        }
-  
-        // Return the product to stock
-        product.stock += item.quantity; // Assuming `stock` is the field representing the available quantity
-        await product.save();
-      }
+      // If status is "Cancelled" and was not cancelled before, adjust stock
+  if (status === "Cancelled" && previousStatus !== "Cancelled") {
+    const product = await Products.findById(item.productId);
+    if (!product) {
+      return res.status(404).json({ message: `Product not found: ${item.productId}` });
+    }
+
+    // Find the size index and add the quantity back to stock
+    const sizeIndex = product.stock.findIndex((stockItem) => stockItem.size === item.size);
+    if (sizeIndex === -1) {
+      return res.status(400).json({ message: `Size ${item.size} not available for product ${product.name}` });
+    }
+
+    // Add the item quantity back to the size-specific stock
+    product.stock[sizeIndex].stock += item.quantity;
+
+    // Save the product with the updated stock
+    await product.save();
+  }
   
       // Check if the new status is "Delivered" and update payment status
       if (status === "Delivered") {
@@ -118,10 +127,7 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
       await order.save();
   
       res.status(200).json({ message: "Item status updated successfully", order });
-    } catch (error) {
-      console.error("Error updating item status:", error);
-      res.status(500).json({ message: error.message });
-    }
+   
   });
 
 

@@ -3,11 +3,18 @@ import Products from "../../../models/products/products-model.js";
 import Order from "../../../models/order/order-model.js";
 import Cart from "../../../models/cart/cart-model.js";
 import mongoose from "mongoose";
+
+import {v4}from 'uuid'
+
+
 // -------------------------------route => POST/v1/orders/create----------------------------------------------
 ///* @desc   Create a new order
 ///? @access Private
 
 export const createOrder = expressAsyncHandler(async (req, res) => {
+
+
+
   const { items, shippingAddress, paymentMethod, billAmount, discount } =
     req.body;
   const userId = req.user.id;
@@ -17,7 +24,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
   }
 
   try {
-    console.log(items);
+  
     // Validate and adjust stock for each item
     for (let item of items) {
       const product = await Products.findById(item.productId);
@@ -37,10 +44,12 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
           message: `Size ${item.size} not available for product ${product.name}`,
         });
       }
-console.log(product?.stock[sizeIndex]?.stock,item?.quantity,'llll');
+
+      console.log(product?.stock[sizeIndex]?.stock < item?.quantity,'ssssssssssssssssssssss,',item?.quantity)
+
       if (product?.stock[sizeIndex]?.stock < item?.quantity) {
         return res.status(400).json({
-          message: `Insufficient stock for product ${product?.name} in size ${item?.size}. Available stock: ${product?.sizes[sizeIndex]?.stock}`,
+          message: `Insufficient stock for product ${product?.productName} in size ${item?.size}. Available stock: ${product?.stock[sizeIndex]?.stock}`,
         });
       }
 
