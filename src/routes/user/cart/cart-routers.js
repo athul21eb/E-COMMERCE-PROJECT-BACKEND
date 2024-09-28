@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
   addToCart,
-  getToCart,
+  getCartWithStockAdjustment,
   removeToCart,
   updateToCart,
   clearCart,
@@ -15,7 +15,7 @@ const CartRouter = Router();
 CartRouter.post("/add-to-cart", addToCart);
 
 // Route to get the user's cart
-CartRouter.get("/get-cart", getToCart);
+CartRouter.get("/get-cart", getCartWithStockAdjustment);
 
 // Route to remove a product from the cart
 CartRouter.delete("/remove-from-cart/:itemId", removeToCart);

@@ -196,7 +196,7 @@ const login = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error(`${loginUser.firstName} please use google sign in !`);
   }
-  console.log(await loginUser.matchPassword(password));
+  
   //// checking =>   find  user with given credentials and checking the password match
   if (loginUser && (await loginUser.matchPassword(password))) {
     if (loginUser.isBlocked) {
@@ -601,6 +601,10 @@ const updateUserDetails = asyncHandler(async (req, res) => {
   });
 });
 
+<<<<<<< HEAD
+=======
+///hello 44444
+>>>>>>> feature
 
 
 

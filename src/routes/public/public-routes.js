@@ -1,23 +1,13 @@
 import { Router } from "express";
-import { getAllBrands, getAllProducts, getProductById } from "../../controllers/public/public-controllers.js";
-
+import { getAllProductsWithFilters, getAllBrands, getProductById, getNewArrivals, getProductsByCategory } from "../../controllers/public/public-controllers.js";
 
 const PublicRouter = Router();
 
-
-
-//// ------------------------------- public Routes----------------------------------------------
-
-
-PublicRouter.get("/get-products",getAllProducts);
-
-PublicRouter.get("/get-Brands",getAllBrands);
-PublicRouter.get("/get-product/:id",getProductById)
-
-
-
-
-
-
+// Public Routes
+PublicRouter.get("/get-products", getAllProductsWithFilters);
+PublicRouter.get("/get-brands", getAllBrands);
+PublicRouter.get("/get-product/:id", getProductById);
+PublicRouter.get("/new-arrivals", getNewArrivals);
+PublicRouter.get("/products/category/:categoryName", getProductsByCategory);
 
 export default PublicRouter;
