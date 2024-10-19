@@ -3,62 +3,47 @@ import Products from "../../../models/products/products-model.js";
 import Order from "../../../models/order/order-model.js";
 import Cart from "../../../models/cart/cart-model.js";
 import mongoose from "mongoose";
+import { populate } from "dotenv";
 
-import {v4}from 'uuid'
 
-
-// -------------------------------route => POST/v1/orders/create----------------------------------------------
+// //-------------------------------route => POST/v1/orders/create----------------------------------------------
 ///* @desc   Create a new order
 ///? @access Private
 
 export const createOrder = expressAsyncHandler(async (req, res) => {
-
-
-
-  const { items, shippingAddress, paymentMethod, billAmount, discount } =
-    req.body;
+  const { items, shippingAddress, paymentMethod, billAmount, discount } = req.body;
   const userId = req.user.id;
 
   if (!items || !shippingAddress || !paymentMethod || !billAmount) {
-    return res.status(400).json({ message: "Please fill in all fields" });
+    throw new Error("Please fill in all fields");
   }
 
   try {
-  
-    // Validate and adjust stock for each item
-    for (let item of items) {
-      const product = await Products.findById(item.productId);
+    // Check if cart exists and validate stock for each item in the cart
+    const cart = await Cart.findOne({ user: userId }).populate("items.productId");
 
-      if (!product) {
-        return res
-          .status(404)
-          .json({ message: `Product not found: ${item.productId}` });
-      }
-
-      const sizeIndex = product?.stock.findIndex(
-        (size) => size.size === item.size
-      );
-
-      if (sizeIndex === -1) {
-        return res.status(400).json({
-          message: `Size ${item.size} not available for product ${product.name}`,
-        });
-      }
-
-      console.log(product?.stock[sizeIndex]?.stock < item?.quantity,'ssssssssssssssssssssss,',item?.quantity)
-
-      if (product?.stock[sizeIndex]?.stock < item?.quantity) {
-        return res.status(400).json({
-          message: `Insufficient stock for product ${product?.productName} in size ${item?.size}. Available stock: ${product?.stock[sizeIndex]?.stock}`,
-        });
-      }
-
-      // Adjust stock
-      product.stock[sizeIndex].stock -= item.quantity;
-      await product.save();
+    if (!cart) {
+      throw new Error("Cart not found for the user.");
     }
 
-    // Create and save the order
+    for (let cartItem of cart.items) {
+      const product = await Products.findById(cartItem.productId);
+
+      if (!product) {
+        throw new Error(`Product not found in the cart: ${cartItem.productId}`);
+      }
+
+      const sizeIndex = product.stock.findIndex((size) => size.size === cartItem.size);
+      if (sizeIndex === -1) {
+        throw new Error(`Size ${cartItem.size} not available for product ${product.name}`);
+      }
+
+      if (product.stock[sizeIndex].stock < cartItem.quantity) {
+        throw new Error(`Insufficient stock for product ${product.productName} in size ${cartItem.size}. Available stock: ${product.stock[sizeIndex].stock}`);
+      }
+    }
+
+    // Create and save the order only after validating the stock
     const newOrder = new Order({
       userId,
       items,
@@ -69,15 +54,22 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
-
-    if (savedOrder) {
-      // Clear cart
-      const cart = await Cart.findOneAndUpdate(
-        { user: userId },
-        { $set: { items: [] } },
-        { new: true }
-      );
+    if (!savedOrder) {
+      throw new Error("Failed to save the order");
     }
+
+    // Adjust stock for each item in the order request
+    for (let item of items) {
+      const product = await Products.findById(item.productId);
+      const sizeIndex = product.stock.findIndex((size) => size.size === item.size);
+
+      // Reduce stock after order confirmation
+      product.stock[sizeIndex].stock -= item.quantity;
+      await product.save();
+    }
+
+    // Clear the cart after order is successfully placed
+    await Cart.findOneAndUpdate({ user: userId }, { $set: { items: [] } }, { new: true });
 
     res.status(201).json({
       message: "Order confirmed successfully",
@@ -85,9 +77,10 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error("Error confirming order:", error);
-    res.status(500).json({ message: "Failed to confirm order" });
+    res.status(500).json({ message: error.message });
   }
 });
+
 
 // -------------------------------route => GET/v1/orders/user-orders----------------------------------------------
 // /* @desc   Get all orders for a specific user

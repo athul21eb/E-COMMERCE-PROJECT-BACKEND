@@ -3,7 +3,7 @@ import Wishlist from "../../../models/wishlist/wishlist-model.js";
 import Product from "../../../models/products/products-model.js";
 import Cart from "../../../models/cart/cart-model.js";
 
-// @desc   Add product to wishlist
+////----------- @desc   Add product to wishlist
 // @route  POST /wishlist/add
 // @access Private
 const addToWishlist = expressAsyncHandler(async (req, res) => {
@@ -41,7 +41,7 @@ const addToWishlist = expressAsyncHandler(async (req, res) => {
   
 });
 
-// @desc   Remove product from wishlist
+////---------------- @desc   Remove product from wishlist
 // @route  DELETE /wishlist/remove/:productId
 // @access Private
 const removeFromWishlist = expressAsyncHandler(async (req, res) => {
@@ -67,14 +67,14 @@ const removeFromWishlist = expressAsyncHandler(async (req, res) => {
   }
 });
 
-// @desc   Get all products in wishlist
+////------------------ @desc   Get all products in wishlist
 // @route  GET /wishlist
 // @access Private
 const getWishList = expressAsyncHandler(async (req, res) => {
   const userId = req.user.id;
 
   // Find wishlist by user ID
-  const wishlist = await Wishlist.findOne({ userId }).populate("products");
+  const wishlist = await Wishlist.findOne({ userId }).populate({path:"products",populate:{path:"offer"}})
 
   if (!wishlist) {
     res.status(404);

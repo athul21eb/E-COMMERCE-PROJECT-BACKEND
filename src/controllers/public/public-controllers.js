@@ -30,29 +30,45 @@ export const getAllProductsWithFilters = expressAsyncHandler(
       },
     });
 
-    // Step 2: Populate category
-    pipeline.push({
-      $lookup: {
-        from: "categories",
-        localField: "category",
-        foreignField: "_id",
-        as: "category",
-      },
-    });
+    // Step 2: Populate category and check if the category is active
+pipeline.push({
+  $lookup: {
+    from: "categories",
+    let: { categoryId: "$category" },
+    pipeline: [
+      { $match: { $expr: { $and: [{ $eq: ["$_id", "$$categoryId"] }, { $eq: ["$isActive", true] }] } } },
+    ],
+    as: "category",
+  },
+});
 
-    // Step 3: Populate brand
-    pipeline.push({
-      $lookup: {
-        from: "brands",
-        localField: "brand",
-        foreignField: "_id",
-        as: "brand",
-      },
-    });
+// Step 3: Populate brand and check if the brand is active
+pipeline.push({
+  $lookup: {
+    from: "brands",
+    let: { brandId: "$brand" },
+    pipeline: [
+      { $match: { $expr: { $and: [{ $eq: ["$_id", "$$brandId"] }, { $eq: ["$isActive", true] }] } } },
+    ],
+    as: "brand",
+  },
+});
+    
+ // Step 4: Populate offer
+ pipeline.push({
+  $lookup: {
+    from: "offers",
+    localField: "offer",
+    foreignField: "_id",
+    as: "offer",
+  },
+});
 
-    // Step 4: Unwind category and brand
-    pipeline.push({ $unwind: "$category" });
-    pipeline.push({ $unwind: "$brand" });
+// Step 5: Unwind category and brand
+pipeline.push({ $unwind: "$category" });
+pipeline.push({ $unwind: "$brand" });
+pipeline.push({ $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } });
+
 
     // Step 5: Apply search filters if provided
     if (search) {
@@ -177,7 +193,7 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
     .populate({
       path: "brand",
       match: { isActive: true }, // Ensure the brand is active
-    });
+    }).populate('offer');
 
   // If no product found or the category/brand is not active
   if (!product || !product.category || !product.brand) {
@@ -186,7 +202,7 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
   }
 
   // Fetch related products from the same category (up to 5)
-  const relatedProducts = await Products.aggregate([
+  let relatedProducts = await Products.aggregate([
     {
       $match: {
         deletedAt: { $exists: false }, // Not soft-deleted
@@ -211,8 +227,17 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
         as: "category",
       },
     },
+    {
+      $lookup: {
+        from: "offers",
+        localField: "offer",
+        foreignField: "_id",
+        as: "offer",
+      },
+    },
     { $unwind: "$brand" },
     { $unwind: "$category" },
+    { $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } },
     {
       $match: {
         "brand.isActive": true, // Ensure the brand is active
@@ -222,6 +247,53 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
     { $limit: 5 }, // Limit to 5 related products
   ]);
 
+
+   // If no related products are found, fetch fallback products from other categories
+   if (!relatedProducts.length) {
+    relatedProducts = await Products.aggregate([
+      {
+        $match: {
+          deletedAt: { $exists: false }, // Not soft-deleted
+          isActive: true, // Only active products
+          _id: { $ne: product._id }, // Exclude the current product
+        },
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "brand",
+          foreignField: "_id",
+          as: "brand",
+        },
+      },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "category",
+        },
+      },
+      {
+        $lookup: {
+          from: "offers",
+          localField: "offer",
+          foreignField: "_id",
+          as: "offer",
+        },
+      },
+      { $unwind: "$brand" },
+      { $unwind: "$category" },
+      { $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          "brand.isActive": true, // Ensure the brand is active
+          "category.isActive": true, // Ensure the category is active
+        },
+      },
+      { $limit: 5 }, // Limit to 5 fallback products
+    ]);
+  }
  
 
   res.status(200).json({
@@ -253,7 +325,7 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     .populate({
       path: "brand",
       match: { isActive: true },
-    });
+    }).populate("offer");
 
   const activeProducts = newArrivals.filter(
     (product) => product.category && product.brand
@@ -295,7 +367,7 @@ export const getProductsByCategory = expressAsyncHandler(async (req, res) => {
     .populate({
       path: "brand",
       match: { isActive: true },
-    });
+    }).populate("offer");
 
   const activeProducts = products.filter(
     (product) => product.category && product.brand
