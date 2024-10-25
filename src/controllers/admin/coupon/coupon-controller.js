@@ -30,6 +30,7 @@ const addCoupon = asyncHandler(async (req, res) => {
     minPurchaseAmount,
     maxDiscountAmount,
   } = req.body;
+ 
 
   const coupon = await Coupon.create({
     code,

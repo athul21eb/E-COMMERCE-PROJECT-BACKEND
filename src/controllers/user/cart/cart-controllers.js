@@ -73,7 +73,7 @@ const addToCart = expressAsyncHandler(async (req, res) => {
     }
   }
 
-  const cartDetails = calculateCartTotals(cart?.items);
+  const cartDetails = calculateCartTotals(cart);
 
   console.log(cartDetails, cart, "bbbbbbbbbbbbbbbbbbbbbbbb");
   // Check if the applied coupon is valid based on the cart total and the expiration date
@@ -178,16 +178,56 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
 
   cart.items = await Promise.all(
     cart.items.map(async (item) => {
-      const product = await Product.findOne({
-        _id: item?.productId,
-        isActive: true,
-      });
+      const product = await Product.aggregate([
+        {
+          $match: {
+            deletedAt: { $exists: false }, // Not soft-deleted
+            isActive: true, // Only active products
+         
+            _id:item.productId._id , // Exclude the current product
+          },
+        },
+        {
+          $lookup: {
+            from: "brands",
+            localField: "brand",
+            foreignField: "_id",
+            as: "brand",
+          },
+        },
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category",
+            foreignField: "_id",
+            as: "category",
+          },
+        },
+        {
+          $lookup: {
+            from: "offers",
+            localField: "offer",
+            foreignField: "_id",
+            as: "offer",
+          },
+        },
+        { $unwind: "$brand" },
+        { $unwind: "$category" },
+        { $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } },
+        {
+          $match: {
+            "brand.isActive": true, // Ensure the brand is active
+            "category.isActive": true, // Ensure the category is active
+          },
+        },
+        // Limit to 5 related products
+      ]);
 
-      if (!product) {
+      if (!product[0]) {
         return null; // Product not found, return null so it can be filtered out
       }
-
-      const sizeStock = product.stock.find((stock) => stock.size === item.size);
+console.log(product[0]?.stock )
+      const sizeStock = product[0]?.stock?.find((stock) => stock.size === item.size);
 
       if (!sizeStock) {
         return null; // Size not found, return null so it can be filtered out
@@ -206,13 +246,9 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
   // Filter out null values (products not found or invalid size)
   cart.items = cart.items.filter((item) => item !== null);
 
-  const cartDetails = calculateCartTotals(cart?.items);
+  const cartDetails = calculateCartTotals(cart);
 
-  console.log(
-    cartDetails.cartTotal,
-    cart?.appliedCoupon?.minPurchaseAmount,
-    "bbbbbbbbbbbbbbbbbbbbbbbb"
-  );
+  
   // Check if the applied coupon is valid based on the cart total and the expiration date
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
@@ -272,13 +308,9 @@ const removeToCart = expressAsyncHandler(async (req, res) => {
     throw new Error("Cart not found");
   }
 
-  const cartDetails = calculateCartTotals(cart?.items);
+  const cartDetails = calculateCartTotals(cart);
 
-  console.log(
-    cartDetails.cartTotal,
-    cart.appliedCoupon?.minPurchaseAmount,
-    "bbbbbbbbbbbbbbbbbbbbbbbb"
-  );
+  
   // Check if the applied coupon is valid based on the cart total and the expiration date
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
@@ -375,12 +407,14 @@ const updateToCart = expressAsyncHandler(async (req, res) => {
     ],
   });
 
-  const cartDetails = calculateCartTotals(cart?.items);
+  const cartDetails = calculateCartTotals(cart);
 
  
   // Check if the applied coupon is valid based on the cart total and the expiration date
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
+
+    
 
     // Check if the cart total is below the minimum purchase amount or coupon is expired
     if (
@@ -388,8 +422,31 @@ const updateToCart = expressAsyncHandler(async (req, res) => {
       new Date(expirationDate) < new Date()
     ) {
       cart.appliedCoupon = null; // Remove the coupon
+
+  // Save the updated cart
+  await cart.save();
+
+  // Populate the updated cart to include product and brand details
+  // Populate appliedCoupon first
+  await cart.populate({
+    path: "appliedCoupon",
+    select: "code discount expirationDate maxDiscountAmount minPurchaseAmount",
+  });
+
+  // Then populate items.productId with offer, brand, and category
+  await cart.populate({
+    path: "items.productId",
+    populate: [
+      { path: "offer" },
+      { path: "brand" }, // Populate 'brand' field
+      { path: "category" }, // Populate 'category' field
+    ],
+  });
+
     }
   }
+
+
 
   // Respond with the updated cart
   res.status(200).json({ message: "Product updated successfully", cart });

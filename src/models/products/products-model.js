@@ -48,12 +48,12 @@ const productSchema = new mongoose.Schema(
     regularPrice: {
       type: Number,
       required: [true, "Regular price is required"],
-      min: [0, "Regular price must be a positive number"],
+      min: [100, "Regular price must be a positive number more than 100"],
     },
     salePrice: {
       type: Number,
       required: [true, "Sale price is required"],
-      min: [0, "Sale price must be a positive number"],
+      min: [100, "Sale price must be a positive number more than 100"],
       validate: {
         validator: function (value) {
           return value <= this.regularPrice;
