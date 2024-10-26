@@ -1,0 +1,180 @@
+import expressAsyncHandler from "express-async-handler";
+import RazorPay from "razorpay";
+import { v4 } from "uuid";
+import crypto from "crypto";
+import  Wallet  from "../../../models/wallet/wallet-model.js";
+// //-------------------------------route => get/v1/wallet/create----------------------------------------------
+///* @desc   create wallet
+///? @access Private
+
+export const createWallet = expressAsyncHandler(async (req, res) => {
+  const existingWallet = await Wallet.findOne({
+    user_id: req.user.id,
+  }).populate("user_id");
+
+  if (existingWallet) {
+    res.status(409);
+    throw new Error(
+      `Wallet Existed for this user ${existingWallet?.user_id?.firstName}`
+    );
+  }
+
+  const createWallet = await Wallet.create({
+    user_id: req.user.id,
+    balance: 0,
+  });
+  if (createWallet) {
+    res
+      .status(201)
+      .json({ message: "Wallet Created Successfully", wallet: createWallet });
+  } else {
+    res.status(500);
+    throw new Error(`Failed To Create Wallet `);
+  }
+});
+
+// //-------------------------------route => POST/v1/wallet/add-money----------------------------------------------
+///* @desc   add money to  wallet
+///? @access Private
+
+export const addMoneyToWallet = expressAsyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  if (Number(amount) < 1) {
+    res.status(400);
+    throw new Error("Amount Can Not Be Less than One Rupee");
+  }
+
+  const wallet = await Wallet.findOne({ user_id: req.user.id });
+
+  if (!wallet) {
+    res.status(404);
+    throw new Error("Wallet Not found ");
+  }
+
+  const razorPay = new RazorPay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+
+  const paymentOrder = await razorPay.orders.create({
+    amount: amount * 100,
+    currency: "INR",
+  });
+
+  wallet.transactions.push({
+    transaction_id: v4(),
+    payment_id: paymentOrder.id,
+    amount: amount,
+    type: "credit",
+    status: "initiated",
+  });
+
+  await wallet.save();
+
+  res.status(200).json(paymentOrder);
+});
+
+// //-------------------------------route => get/v1/wallet/----------------------------------------------
+///* @desc   get details  wallet
+///? @access Private
+export const getWalletDetails = expressAsyncHandler(async (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+
+  const wallet = await Wallet.findOne({ user_id: req.userId });
+
+  if (!wallet) {
+    res.status(404);
+    throw new Error("Wallet not found for the requested user");
+  }
+
+  wallet.transactions.sort((a, b) => b.createdAt - a.createdAt);
+  const filteredTransactions = wallet.transactions.filter(
+    (txn) => txn.status !== "initiated"
+  );
+
+  const isWalletCreated = Boolean(wallet);
+  const totalTransactions = filteredTransactions.length;
+  const totalPages = Math.ceil(totalTransactions / limit);
+  const startIndex = (page - 1) * limit;
+  const paginatedTransactions = filteredTransactions.slice(
+    startIndex,
+    startIndex + limit
+  );
+
+  return res.status(200).json({
+    isWalletCreated,
+    balance: wallet.balance,
+    totalTransactions,
+    totalPages,
+    transactions: paginatedTransactions,
+  });
+});
+
+// //-------------------------------route => POST/v1/wallet/verify-payment----------------------------------------------
+///* @desc   verify the  money to add  wallet
+///? @access Private
+
+export const verifyPaymentToWallet = expressAsyncHandler(async (req, res) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, error } =
+    req.body;
+
+  
+
+  if (error) {
+    const wallet = await Wallet.findOne({
+        user_id: req.user.id,
+        "transaction.payment_id": error.metadata.order.id,
+      });
+
+      if (!wallet) {
+        res.status(400);
+        throw new Error("Wallet Not Found ");
+      }
+
+    const transaction = wallet.transactions.find(
+      (txn) => txn.payment_id === error.metadata.order.id
+    );
+    if (transaction) {
+      transaction.status = "failed";
+      await wallet.save();
+      res.status(400);
+      throw new Error(`Failed to add money in the wallet`);
+    } else {
+      res.status(404);
+      throw new Error(`transaction doesn't found`);
+    }
+  }
+
+  const wallet = await Wallet.findOne({
+    user_id: req.user.id,
+    "transaction.payment_id": razorpay_order_id,
+  });
+  if (!wallet) {
+    res.status(400);
+    throw new Error("Wallet Not Found ");
+  }
+  const transaction = wallet.transactions.find(
+    (txn) => txn.payment_id === razorpay_order_id
+  );
+  const generated_signature = await crypto
+    .createHmac("sha256",process.env.RAZORPAY_KEY_SECRET).update(razorpay_order_id+"|"+razorpay_payment_id).digest("hex")
+
+  if (generated_signature === razorpay_signature) {
+    if (transaction) {
+      transaction.status = "success";
+      wallet.balance += Number(transaction.amount);
+
+      await wallet.save();
+      res
+        .status(200)
+        .json({ message: "Add Money to Wallet Successfully", wallet });
+    } else {
+      res.status(404);
+      throw new Error(`transaction doesn't found`);
+    }
+  } else {
+    res.status(400);
+    throw new Error(`invalid razorPay transaction!`);
+  }
+});

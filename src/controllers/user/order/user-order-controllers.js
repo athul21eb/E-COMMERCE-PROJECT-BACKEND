@@ -241,7 +241,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
           method:"PayOnDelivery",
           status:"Pending",
         },
-        OrderStatus: "Confirmed",
+        orderStatus: "Confirmed",
         appliedCouponAmount: parseInt(appliedCouponAmount),
       });
 
@@ -274,7 +274,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         }
 
         // Respond with success message
-        return res.status(200).json({
+         res.status(200).json({
           message: `Order placed successfully with ${paymentMethod}`,
           order,
         });
@@ -283,6 +283,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         res.status(400);
         throw new Error("Failed to place order");
       }
+
       break;
 
     /////------RazorPay--------
@@ -306,7 +307,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
           transactionId:crypto.randomUUID(),
           gateway_order_id:paymentOrder.id
         },
-        OrderStatus: "Initiated",
+        orderStatus: "Initiated",
         appliedCouponAmount: parseInt(appliedCouponAmount),
       });
       
@@ -342,20 +343,20 @@ export const verifyPayment = expressAsyncHandler(async(req,res)=>{
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, error } = req.body
 
   if(error){
-      const order = await Order.findOneAndDelete({'payment.gateway_order_id':error.metadata._id});
-      res.status(400);
-      throw new Error (`Failed to place the order due to payment failure ,please try again`);
-    // const order = await Order.findOne({'payment.gateway_order_id':error.metadata._id});
-    // order.orderStatus = 'Failed';
-    // order.payment.status = 'Failed';
-    // order.payment.method = 'RazorPay'
-    // const {items} = order;
-    // for(const item of items){
-    //   item.status = "Failed";
-    // }
-    // await order.save();
-    // res.status(400);
-    // throw new Error(`'Failed to place the order due to payment failure ,please try again'`)
+      // const order = await Order.findOneAndDelete({'payment.gateway_order_id':error.metadata._id});
+      // res.status(400);
+      // throw new Error (`Failed to place the order due to payment failure ,please try again`);
+    const order = await Order.findOne({'payment.gateway_order_id':error.metadata.order_id});
+    order.orderStatus = 'Failed';
+    order.payment.status = 'Failed';
+    order.payment.method = 'RazorPay'
+    const {items} = order;
+    for(const item of items){
+      item.status = "Failed";
+    }
+    await order.save();
+    res.status(400);
+    throw new Error(`'Failed to place the order due to payment failure ,please try again'`)
   }
 
   const generateSignature = crypto.createHmac('sha256',process.env.RAZORPAY_KEY_SECRET).update(razorpay_order_id+'|'+razorpay_payment_id).digest("hex");
@@ -363,7 +364,7 @@ export const verifyPayment = expressAsyncHandler(async(req,res)=>{
     const order = await Order.findOne({ "payment.gateway_order_id": razorpay_order_id })
     
     .populate("items.productId");
-    console.log(order);
+    
 
     const { items } = order
             const bulkOps = items.map((item) => ({
@@ -387,14 +388,16 @@ export const verifyPayment = expressAsyncHandler(async(req,res)=>{
               
           }
 
-           await razorPay.payments.fetch(razorpay_payment_id)
-          order.status = 'Confirmed'
+       const paymentDetails =  await razorPay.payments.fetch(razorpay_payment_id);
+          
+          order.orderStatus = 'Confirmed'
           order.items.forEach(product => {
               product.status = 'Confirmed'
           })
           order.payment.status = 'Success'
           order.payment.method = 'RazorPay';
           await order.save()
+         
           const { _id, ...updateOrder } = order.toObject()
           return res.status(200).json({ message: 'Payment verified successfully', order:updateOrder })
       } else {
