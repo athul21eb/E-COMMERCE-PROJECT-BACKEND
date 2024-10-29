@@ -9,7 +9,7 @@ const notFoundRoute = (req, res, next) => {
 };
 
 const errorHandler = (err, req, res, next) => {
-  res.statusCode === 200 && console.log(err);
+   console.log(err);
 
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   let message = err.message || "internal Server Error";

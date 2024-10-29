@@ -3,7 +3,7 @@ import UserModel from "../user/user-model.js";
 
 
 const TransactionSchema = new mongoose.Schema({
-    transactions_id: { type: String },
+    transaction_id: { type: String },
     payment_id: { type: String },
     description:{type:String},
     amount: {
@@ -35,6 +35,7 @@ const TransactionSchema = new mongoose.Schema({
 const WalletSchema = new mongoose.Schema({
     user_id: {
         type: mongoose.SchemaTypes.ObjectId,
+        ref: "Users",
         required: [true, 'User id is required'],
         validate: {
             validator: async function (v) {

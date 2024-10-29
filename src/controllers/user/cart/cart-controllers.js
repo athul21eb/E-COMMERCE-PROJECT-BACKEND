@@ -226,7 +226,7 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
       if (!product[0]) {
         return null; // Product not found, return null so it can be filtered out
       }
-console.log(product[0]?.stock )
+
       const sizeStock = product[0]?.stock?.find((stock) => stock.size === item.size);
 
       if (!sizeStock) {

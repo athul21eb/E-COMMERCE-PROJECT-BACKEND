@@ -1,6 +1,7 @@
 import expressAsyncHandler from "express-async-handler";
 import RazorPay from "razorpay";
-import { v4 } from "uuid";
+import { v4 as uuidv4 } from 'uuid';
+
 import crypto from "crypto";
 import  Wallet  from "../../../models/wallet/wallet-model.js";
 // //-------------------------------route => get/v1/wallet/create----------------------------------------------
@@ -14,6 +15,7 @@ export const createWallet = expressAsyncHandler(async (req, res) => {
 
   if (existingWallet) {
     res.status(409);
+    console.log(existingWallet)
     throw new Error(
       `Wallet Existed for this user ${existingWallet?.user_id?.firstName}`
     );
@@ -43,7 +45,7 @@ export const addMoneyToWallet = expressAsyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Amount Can Not Be Less than One Rupee");
   }
-
+console.log()
   const wallet = await Wallet.findOne({ user_id: req.user.id });
 
   if (!wallet) {
@@ -63,11 +65,12 @@ export const addMoneyToWallet = expressAsyncHandler(async (req, res) => {
   });
 
   wallet.transactions.push({
-    transaction_id: v4(),
+    transaction_id: uuidv4(),
     payment_id: paymentOrder.id,
     amount: amount,
     type: "credit",
     status: "initiated",
+    description:"Add Money by RazorPay"
   });
 
   await wallet.save();
@@ -81,17 +84,19 @@ export const addMoneyToWallet = expressAsyncHandler(async (req, res) => {
 export const getWalletDetails = expressAsyncHandler(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
 
-  const wallet = await Wallet.findOne({ user_id: req.userId });
+ 
+  const wallet = await Wallet.findOne({ user_id: req.user.id });
 
   if (!wallet) {
     res.status(404);
     throw new Error("Wallet not found for the requested user");
   }
 
-  wallet.transactions.sort((a, b) => b.createdAt - a.createdAt);
+  wallet?.transactions.sort((a, b) => b.updatedAt - a.updatedAt);
   const filteredTransactions = wallet.transactions.filter(
-    (txn) => txn.status !== "initiated"
+    (txn) => txn.status !== "initiated" && txn.status !== "failed"
   );
+  
 
   const isWalletCreated = Boolean(wallet);
   const totalTransactions = filteredTransactions.length;
@@ -119,12 +124,13 @@ export const verifyPaymentToWallet = expressAsyncHandler(async (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, error } =
     req.body;
 
-  
+ 
 
   if (error) {
+    
     const wallet = await Wallet.findOne({
         user_id: req.user.id,
-        "transaction.payment_id": error.metadata.order.id,
+        "transactions.payment_id": error.metadata.order_id,
       });
 
       if (!wallet) {
@@ -133,7 +139,7 @@ export const verifyPaymentToWallet = expressAsyncHandler(async (req, res) => {
       }
 
     const transaction = wallet.transactions.find(
-      (txn) => txn.payment_id === error.metadata.order.id
+      (txn) => txn.payment_id === error.metadata.order_id
     );
     if (transaction) {
       transaction.status = "failed";
@@ -148,7 +154,7 @@ export const verifyPaymentToWallet = expressAsyncHandler(async (req, res) => {
 
   const wallet = await Wallet.findOne({
     user_id: req.user.id,
-    "transaction.payment_id": razorpay_order_id,
+    "transactions.payment_id": razorpay_order_id,
   });
   if (!wallet) {
     res.status(400);

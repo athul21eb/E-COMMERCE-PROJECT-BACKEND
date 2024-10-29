@@ -4,6 +4,8 @@ import Order from "../../../models/order/order-model.js";
 import Cart from "../../../models/cart/cart-model.js";
 import mongoose from "mongoose";
 import crypto from 'crypto'
+import {v4} from 'uuid'
+import Wallet from '../../../models/wallet/wallet-model.js'
 import { Coupon } from "../../../models/coupons/coupons-model.js";
 import { razorPay } from "../../../config/razorpay.js";
 
@@ -269,7 +271,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
           await Products.findOneAndUpdate(
             { _id: item.productId, "stock.size": item.size },
             { $inc: { "stock.$.stock": -item.quantity } },
-            { runValidators: true }
+  
           );
         }
 
@@ -288,14 +290,16 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
 
     /////------RazorPay--------
     case "RazorPay":
+
+        const RazorPayTxnId = v4();
         const paymentOrder = await razorPay.orders.create({
           amount:billAmount*100,
           currency:"INR",
-          receipt:crypto.randomUUID()
+          receipt:RazorPayTxnId
 
         })
         // Create the order with the provided details
-       const orderr = await Order.create({
+         await Order.create({
         userId,
         
         items: verifiedItems,
@@ -304,7 +308,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         payment:{
           status:"Pending",
           method:"RazorPay",
-          transactionId:crypto.randomUUID(),
+          transactionId:RazorPayTxnId,
           gateway_order_id:paymentOrder.id
         },
         orderStatus: "Initiated",
@@ -318,9 +322,93 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
 
     /////------Wallet--------
     case "Wallet":
-      res.status(200).json({
-        message: `Order placed successfully with ${paymentMethod}`,
-      });
+        const wallet = await Wallet.findOne({user_id:userId}) ;
+        if(!wallet){
+          res.status(400);
+          throw new Error(`Create a Wallet First !`);
+        }
+
+        if(wallet.balance<billAmount){
+          res.status(400);
+          throw new Error(`Wallet balance - ₹${wallet.balance} lower than TotalPrice- ₹${billAmount} !`);
+        }
+         
+       // Update the status of verified items to "Confirm"
+      for (const item of verifiedItems) {
+        item.status = "Confirmed";
+      }
+
+      const walletTxnId = v4(); 
+        const orderByWallet = await Order.create({
+          userId,
+          items:verifiedItems,
+          billAmount,
+          shippingAddress,
+          payment:{
+            method:"Wallet",
+            status:"Success",
+            transactionId:walletTxnId,
+          },
+          orderStatus:"Confirmed",
+          appliedCouponAmount: parseInt(appliedCouponAmount)
+        })
+
+        if(orderByWallet){
+                 
+
+          wallet.transactions.push({
+            amount:billAmount,
+            transaction_id:walletTxnId,
+            status:"success",
+            type:"debit",
+            description:`payment for orderId-${orderByWallet._id}`
+
+          })
+          wallet.balance-=billAmount;
+          await wallet.save();
+
+
+           //  if there is in coupon put user id in usage history
+        if (appliedCouponAmount && cart.appliedCoupon?.code) {
+          await Coupon.findOneAndUpdate(
+            {
+              code: cart.appliedCoupon?.code,
+            },
+            {
+              $push: { usageRecords: { user: userId, usedAt: currentDate } },
+            }
+          );
+        }
+
+        // Clear the user's cart after the order is successfully placed
+        await Cart.findOneAndUpdate(
+          { user: userId },
+          { $set: { items: [], appliedCoupon: null } }
+        );
+
+        // Decrease the product stock for each item in the order
+        for (const item of verifiedItems) {
+          await Products.findOneAndUpdate(
+            { _id: item.productId, "stock.size": item.size },
+            { $inc: { "stock.$.stock": -item.quantity } },
+  
+          );
+        }
+
+        // Respond with success message
+         res.status(200).json({
+          message: `Order placed successfully with ${paymentMethod}`,
+          order:orderByWallet,
+        });
+
+
+        }else{
+           // Handle order creation failure
+        res.status(400);
+        throw new Error("Failed to place order");
+        }
+
+
       break;
 
     // Add other cases for different payment methods if necessary
