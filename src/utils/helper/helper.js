@@ -30,6 +30,7 @@ export const getActiveCoupons = async (userId) => {
 
 
 
+
 // Helper function to calculate cart totals
 export const calculateCartTotals = (cartDetails) => {
   const currentDate = new Date();

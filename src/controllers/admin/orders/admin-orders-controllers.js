@@ -1,7 +1,9 @@
-
 import expressAsyncHandler from "express-async-handler";
 import Order from "../../../models/order/order-model.js";
 import Products from "./../../../models/products/products-model.js";
+import { processRefund } from "../../../utils/helper/refundToWallet.js";
+import { restoreProductStock } from "../../../utils/helper/productRestock.js";
+import {v4} from "uuid"
 // -------------------------------route => GET/v1/orders----------------------------------------------
 ///* @desc   Get all orders (admin)
 ///? @access Private (Admin)
@@ -14,14 +16,15 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
     const skip = (page - 1) * limit;
 
     // Fetch paginated orders
-    const orders = await Order.find()
-    .populate({
-      path: "items.productId",
-      populate: [
-        { path: "brand" },
-        { path: "category" } // Assuming your Product model has a category field
-      ],
-    })
+    const orders = await Order.find({ orderStatus: { $ne: "Initiated" } },{_id:false})
+      .populate({
+        path: "items.productId",
+        populate: [
+          { path: "brand" },
+          { path: "category" }, // Assuming your Product model has a category field
+        ],
+      })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
@@ -40,96 +43,110 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
-  
-  // -------------------------------route => GET/v1/orders/:id----------------------------------------------
-  ///* @desc   Get order details by ID
-  ///? @access Private
-  
-  const getOrderDetailsById = expressAsyncHandler(async (req, res) => {
-    try {
-      const { id } = req.params;
-      const order = await Order.findById(id).populate({
-        path: "items.productId",
-        populate: [
-          { path: "brand" },
-          { path: "category" } // Assuming your Product model has a category field
-        ],
-      });
-  
-      if (!order) {
-        return res.status(404).json({ message: "Order not found" });
-      }
-  
-      res.status(200).json({ message: "Order fetched successfully", order });
-    } catch (error) {
-      console.error("Error fetching order details:", error);
-      res.status(500).json({ message: error.message });
-    }
-  });
 
-  const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
-   
-      const { id, itemId } = req.params;
-      const { status } = req.body;
+// -------------------------------route => GET/v1/orders/:id----------------------------------------------
+///* @desc   Get order details by ID
+///? @access Private
 
-     
-  
-      // Validate status
-      if (!["Pending", "Shipped", "Delivered", "Cancelled"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status value" });
-      }
-  
-      // Find the order
-      const order = await Order.findById(id);
-      if (!order) {
-        return res.status(404).json({ message: "Order not found" });
-      }
-  
-      // Find the item in the order
-      const item = order.items.id(itemId);
-      if (!item) {
-        return res.status(404).json({ message: "Item not found in this order" });
-      }
-  
-      // Update the item status
-      const previousStatus = item.status;
-      item.status = status;
-  
-      // If status is "Cancelled" and was not cancelled before, adjust stock
-  if (status === "Cancelled" && previousStatus !== "Cancelled") {
-    const product = await Products.findById(item.productId);
-    if (!product) {
-      return res.status(404).json({ message: `Product not found: ${item.productId}` });
+const getOrderDetailsById = expressAsyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findOne({
+      orderId: id,
+      orderStatus: { $ne: "Initiated" },
+    }).populate({
+      path: "items.productId",
+      populate: [
+        { path: "brand" },
+        { path: "category" }, // Assuming your Product model has a category field
+      ],
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
     }
 
-    // Find the size index and add the quantity back to stock
-    const sizeIndex = product.stock.findIndex((stockItem) => stockItem.size === item.size);
-    if (sizeIndex === -1) {
-      return res.status(400).json({ message: `Size ${item.size} not available for product ${product.name}` });
-    }
-
-    // Add the item quantity back to the size-specific stock
-    product.stock[sizeIndex].stock += item.quantity;
-
-    // Save the product with the updated stock
-    await product.save();
+    res.status(200).json({ message: "Order fetched successfully", order });
+  } catch (error) {
+    console.error("Error fetching order details:", error);
+    res.status(500).json({ message: error.message });
   }
-  
-      // Check if the new status is "Delivered" and update payment status
-      if (status === "Delivered") {
-        order.paymentStatus = "Completed";
-      }
-  
-      // Update the order status
-      await order.updateOrderStatus(); // Custom method to update order status
-  
-      // Save the updated order
-      await order.save();
-  
-      res.status(200).json({ message: "Item status updated successfully", order });
+});
+
+
+//// -------------------------------route => PATCH/v1/:id/orders/:itemId----------------------------------------------
+///* @desc   Change Item status 
+///? @access Private
+
+const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
+  const { id, itemId } = req.params;
+  const { status } = req.body;
+
+  if(!id||!itemId||!status) {
+    res.status(400);
+    throw new Error(`OrderId , item Id and status  are required`)
+  }
+  // Validate status
+  if (![ "Shipped", "Delivered", "Cancelled"].includes(status)) {
+     res.status(400);
+     throw new Error("Invalid status value");
+  }
+
+  // Find the order
+  const order = await Order.findOne({orderId:id, orderStatus: { $ne: "Initiated" }});
+  if (!order) {
+     res.status(404)
+     throw new Error("Order Not  Found")
+  }
+
+  // Find the item in the order
+  const item = order.items.id(itemId);
+  if (!item) {
+     res.status(404)
+     throw new Error("Item not found in this order" ) ;
+  }
+
+  // Update the item status
+  const previousStatus = item.status;
+
+
+  if(status===previousStatus){
+    res.status(400);
+    throw new Error(`item already ${status},invalid status `);
+  }
+
+  item.status = status;
+
+  // If status is "Cancelled" and was not cancelled before, adjust stock
+  if (status === "Cancelled") {
+
+    item.cancelledDate = new Date();
+    await processRefund(order,item,order.userId);
+    
+    await restoreProductStock(item.productId,item.size,item.quantity);
+
+    
+  }
+
+  // Check if the new status is "Delivered" and update payment status
+  if (status === "Delivered") {
    
-  });
+    item.deliveryDate = new Date();
+
+    const allOrderItemsDelivered = order.items.every(item=>item.status==="Delivered");
+   
+    if(allOrderItemsDelivered){
+      order.payment.status = "Success";
+      order.payment.transactionId = v4();
+    }
+
+  }
 
 
-  export {getOrderDetailsById,getAllOrderData,updateOrderItemStatus};
-  
+  // Save the updated order
+  await order.save();
+
+  res.status(200).json({ message: "Item status updated successfully", order });
+});
+
+export { getOrderDetailsById, getAllOrderData, updateOrderItemStatus };

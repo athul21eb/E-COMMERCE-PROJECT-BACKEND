@@ -63,7 +63,7 @@ const itemSchema = new Schema({
 
 const orderSchema = new Schema(
   {
-    orderId: { type: String, required: true, default: v4 }, // Moved to use v4 directly
+    orderId: { type: String, required: true, default: v4 ,unique:true}, // Moved to use v4 directly
     userId: {
       type: mongoose.SchemaTypes.ObjectId,
       ref: "User",
