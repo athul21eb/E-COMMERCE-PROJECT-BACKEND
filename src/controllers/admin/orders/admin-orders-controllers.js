@@ -3,7 +3,7 @@ import Order from "../../../models/order/order-model.js";
 import Products from "./../../../models/products/products-model.js";
 import { processRefund } from "../../../utils/helper/refundToWallet.js";
 import { restoreProductStock } from "../../../utils/helper/productRestock.js";
-import {v4} from "uuid"
+import { v4 } from "uuid";
 // -------------------------------route => GET/v1/orders----------------------------------------------
 ///* @desc   Get all orders (admin)
 ///? @access Private (Admin)
@@ -15,21 +15,25 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit) || 10; // Default to 10 orders per page if not provided
     const skip = (page - 1) * limit;
 
-    // Fetch paginated orders
-    const orders = await Order.find({ orderStatus: { $ne: "Initiated" } },{_id:false})
-      .populate({
-        path: "items.productId",
-        populate: [
-          { path: "brand" },
-          { path: "category" }, // Assuming your Product model has a category field
-        ],
-      })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+ // Fetch paginated orders
+const orders = await Order.find(
+  { orderStatus: { $ne: "Initiated" } },
+  { _id: false }
+)
+  .populate({
+    path: "items.productId",
+    populate: [
+      { path: "brand" },
+      { path: "category" }, // Assuming your Product model has a category field
+    ],
+  })
+  .sort({ createdAt: -1 })
+  .skip(skip)
+  .limit(limit);
 
-    // Count total number of orders
-    const totalOrders = await Order.countDocuments();
+// Count total number of orders
+const totalOrders = await Order.countDocuments({ orderStatus: { $ne: "Initiated" } });
+
 
     res.status(200).json({
       message: "Orders fetched successfully",
@@ -73,75 +77,96 @@ const getOrderDetailsById = expressAsyncHandler(async (req, res) => {
   }
 });
 
-
 //// -------------------------------route => PATCH/v1/:id/orders/:itemId----------------------------------------------
-///* @desc   Change Item status 
+///* @desc   Change Item status
 ///? @access Private
 
 const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
   const { id, itemId } = req.params;
   const { status } = req.body;
 
-  if(!id||!itemId||!status) {
+  if (!id || !itemId || !status) {
     res.status(400);
-    throw new Error(`OrderId , item Id and status  are required`)
+    throw new Error(`OrderId , item Id and status  are required`);
   }
   // Validate status
-  if (![ "Shipped", "Delivered", "Cancelled"].includes(status)) {
-     res.status(400);
-     throw new Error("Invalid status value");
+  if (!["Shipped", "Delivered", "Cancelled"].includes(status)) {
+    res.status(400);
+    throw new Error("Invalid status value");
   }
 
   // Find the order
-  const order = await Order.findOne({orderId:id, orderStatus: { $ne: "Initiated" }});
+  const order = await Order.findOne({
+    orderId: id,
+    orderStatus: { $ne: "Initiated" },
+  });
   if (!order) {
-     res.status(404)
-     throw new Error("Order Not  Found")
+    res.status(404);
+    throw new Error("Order Not  Found");
   }
 
   // Find the item in the order
   const item = order.items.id(itemId);
   if (!item) {
-     res.status(404)
-     throw new Error("Item not found in this order" ) ;
+    res.status(404);
+    throw new Error("Item not found in this order");
   }
 
-  // Update the item status
+  // Check for duplicate status update
   const previousStatus = item.status;
-
-
-  if(status===previousStatus){
+  if (status === previousStatus) {
     res.status(400);
-    throw new Error(`item already ${status},invalid status `);
+    throw new Error(`Item is already ${status}, invalid status change`);
+  }
+
+  // Define status priorities for comparison
+  const statusPriority = {
+    Pending: 1,
+    Confirmed: 2,
+    Cancelled: 3,
+    Shipped: 4,
+    Delivered: 5,
+
+    "Return Requested": 6,
+    "Return Accepted": 7,
+    "Return Rejected": 8,
+    Failed: 9,
+  };
+
+  // Get priority values for current and new statuses
+  const currentPriority = statusPriority[previousStatus];
+  const newPriority = statusPriority[status];
+
+  // Restrict invalid status transitions
+  if (currentPriority >= newPriority) {
+    res.status(400);
+    throw new Error("Invalid status transition due to current status level");
   }
 
   item.status = status;
 
   // If status is "Cancelled" and was not cancelled before, adjust stock
   if (status === "Cancelled") {
-
     item.cancelledDate = new Date();
-    await processRefund(order,item,order.userId);
-    
-    await restoreProductStock(item.productId,item.size,item.quantity);
 
-    
+    await processRefund(order, item, order.userId);
+
+    await restoreProductStock(item.productId, item.size, item.quantity);
   }
 
   // Check if the new status is "Delivered" and update payment status
   if (status === "Delivered") {
-   
     item.deliveryDate = new Date();
 
-    const allOrderItemsDelivered = order.items.every(item=>item.status==="Delivered");
-   
-    if(allOrderItemsDelivered){
+    const allOrderItemsDelivered = order.items.every(
+      (item) => item.status === "Delivered"
+    );
+
+    if (allOrderItemsDelivered) {
       order.payment.status = "Success";
       order.payment.transactionId = v4();
     }
-
   }
-
 
   // Save the updated order
   await order.save();

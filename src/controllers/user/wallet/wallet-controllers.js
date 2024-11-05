@@ -81,40 +81,44 @@ console.log()
 // //-------------------------------route => get/v1/wallet/----------------------------------------------
 ///* @desc   get details  wallet
 ///? @access Private
-export const getWalletDetails = expressAsyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+export  const getWalletDetails = expressAsyncHandler(async (req, res) => {
+  // Default to page 1 and limit 10 if not provided; ensure they are integers
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
 
- 
+  // Fetch the user's wallet
   const wallet = await Wallet.findOne({ user_id: req.user.id });
-
+  
   if (!wallet) {
     res.status(404);
     throw new Error("Wallet not found for the requested user");
   }
 
-  wallet?.transactions.sort((a, b) => b.updatedAt - a.updatedAt);
-  const filteredTransactions = wallet.transactions.filter(
+  // Sort transactions by updatedAt in descending order
+  const sortedTransactions = wallet.transactions.sort((a, b) => b.updatedAt - a.updatedAt);
+
+  // Filter out transactions with status "initiated" or "failed"
+  const filteredTransactions = sortedTransactions.filter(
     (txn) => txn.status !== "initiated" && txn.status !== "failed"
   );
-  
 
-  const isWalletCreated = Boolean(wallet);
+  // Pagination calculations
   const totalTransactions = filteredTransactions.length;
   const totalPages = Math.ceil(totalTransactions / limit);
   const startIndex = (page - 1) * limit;
-  const paginatedTransactions = filteredTransactions.slice(
-    startIndex,
-    startIndex + limit
-  );
+  const endIndex = startIndex + limit;
+  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
 
+  // Return wallet details and paginated transactions
   return res.status(200).json({
-    isWalletCreated,
+    isWalletCreated: Boolean(wallet),
     balance: wallet.balance,
     totalTransactions,
     totalPages,
     transactions: paginatedTransactions,
   });
 });
+
 
 // //-------------------------------route => POST/v1/wallet/verify-payment----------------------------------------------
 ///* @desc   verify the  money to add  wallet
