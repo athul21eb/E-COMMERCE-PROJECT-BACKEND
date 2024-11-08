@@ -9,7 +9,8 @@ const notFoundRoute = (req, res, next) => {
 };
 
 const errorHandler = (err, req, res, next) => {
-   console.log(err);
+  
+   if(process.env.NODE_ENV === "development") console.log(err);
 
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   let message = err.message || "internal Server Error";

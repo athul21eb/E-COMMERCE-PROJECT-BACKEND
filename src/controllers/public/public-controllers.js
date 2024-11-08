@@ -71,17 +71,37 @@ pipeline.push({ $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } })
 
 
     // Step 5: Apply search filters if provided
+    // if (search) {
+    //   pipeline.push({
+    //     $match: {
+    //       $or: [
+    //         { productName: { $regex: search, $options: "i" } },
+    //         { "category.categoryName": { $regex: search, $options: "i" } },
+    //         { "brand.brandName": { $regex: search, $options: "i" } },
+    //       ],
+    //     },
+    //   });
+    // }
     if (search) {
+      // Split the search string into individual words
+      const keywords = search.split("").filter(Boolean); // Remove empty strings
+    
+      // Create $or conditions for each keyword
+      const orConditions = keywords.map((keyword) => ({
+        $or: [
+          { productName: { $regex: keyword, $options: "i" } },
+          { "category.categoryName": { $regex: keyword, $options: "i" } },
+          { "brand.brandName": { $regex: keyword, $options: "i" } },
+        ],
+      }));
+    
       pipeline.push({
         $match: {
-          $or: [
-            { productName: { $regex: search, $options: "i" } },
-            { "category.categoryName": { $regex: search, $options: "i" } },
-            { "brand.brandName": { $regex: search, $options: "i" } },
-          ],
+          $and: orConditions,
         },
       });
     }
+    
 
     // Step 6: Filter by selected brands
     if (selectedBrands) {

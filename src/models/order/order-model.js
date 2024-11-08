@@ -114,7 +114,13 @@ const orderSchema = new Schema(
       required: [true, "Order status is required"],
     },
     orderDate: { type: Date, default: Date.now },
-    appliedCouponAmount: Number,
+    appliedCouponAmount: {type:Number,default:0},
+    couponDetails:{
+      code:String,
+      maxDiscountAmount:Number,
+      minPurchaseAmount:Number,
+      discount:Number,
+    }
   },
   { timestamps: true }
 );

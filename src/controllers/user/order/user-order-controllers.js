@@ -10,6 +10,7 @@ import { Coupon } from "../../../models/coupons/coupons-model.js";
 import { razorPay } from "../../../config/razorpay.js";
 import { processRefund } from "../../../utils/helper/refundToWallet.js";
 import { restoreProductStock } from "../../../utils/helper/productRestock.js";
+import ReturnOrderModel from "../../../models/returnOrder/return-order-model.js";
 
 // //-------------------------------route => POST/v1/orders/create----------------------------------------------
 ///* @desc   Create a new order
@@ -185,6 +186,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
   }
 
   let appliedCouponAmount = 0;
+  let couponDetails = null;
 
   if (cart.appliedCoupon?.code) {
     const coupon = await Coupon.findOne({
@@ -211,6 +213,13 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         coupon.maxDiscountAmount
       );
       billAmount -= appliedCouponAmount;
+
+      couponDetails = (({
+        discount,
+        maxDiscountAmount,
+        minPurchaseAmount,
+        code,
+      }) => ({ discount, maxDiscountAmount, minPurchaseAmount, code }))(coupon);
 
       await Coupon.findOneAndUpdate(
         {
@@ -258,6 +267,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         },
         orderStatus: "Confirmed",
         appliedCouponAmount: parseInt(appliedCouponAmount),
+        ...(couponDetails && { couponDetails }),
       });
 
       if (order) {
@@ -323,6 +333,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         },
         orderStatus: "Initiated",
         appliedCouponAmount: parseInt(appliedCouponAmount),
+        ...(couponDetails && { couponDetails }),
       });
 
       res.status(200).json(paymentOrder);
@@ -362,6 +373,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         },
         orderStatus: "Confirmed",
         appliedCouponAmount: parseInt(appliedCouponAmount),
+        ...(couponDetails && { couponDetails }),
       });
 
       if (orderByWallet) {
@@ -601,17 +613,17 @@ export const cancelOrderItem = expressAsyncHandler(async (req, res) => {
   }
 
   // Check if the item is already cancelled
-  if ([ "Shipped", "Delivered", "Cancelled"].includes(item.status)  ) {
+  if (["Shipped", "Delivered", "Cancelled"].includes(item.status)) {
     res.status(400);
     throw new Error("Item Can not Cancel due to current status");
   }
 
-console.log(item)
+  console.log(item);
   // Set the status to "Cancelled" and update the cancellation date
   item.status = "Cancelled";
   item.cancelledDate = new Date();
   // Process refund if applicable
-  await processRefund(order, item, userId);
+  await processRefund(order, item, userId,`Refund for cancellation of item in order: ${order.orderId}`);
 
   // Save the order with the updated item status
   await order.save();
@@ -628,3 +640,86 @@ console.log(item)
     order,
   });
 });
+
+//// -------------------------------route => PATCH/v1/orders/:orderId/items/:itemId/return----------------------------------------------
+///* @desc   return  an item and return the stock back to inventory
+///? @access Private
+
+export const returnOrderItem = expressAsyncHandler(async (req, res) => {
+  const { orderId, itemId } = req.params;
+  const { reason, remarks } = req.body;
+  if (!orderId || !itemId || !reason) {
+    res.status(400);
+    throw new Error(`OrderId ,reason and ItemId is required`);
+  }
+  const validReasons = [
+    "Product arrived damaged or defective",
+    "Incorrect item received",
+    "Product does not match description",
+    "Changed mind after purchase",
+    "Product does not fit as expected",
+    "Other Reason",
+  ];
+
+  if (!validReasons.includes(reason)) {
+    res.status(400);
+    throw new Error("Enter a valid Reason for return");
+  }
+
+  if (reason === "Other Reason" && !remarks) {
+    res.status(400);
+    throw new Error("Other Reason must have a remarks for return");
+  }
+
+  const userId = req.user.id;
+
+  const order = await Order.findOne({ orderId: orderId, "items._id": itemId });
+
+  if (!order) {
+    res.status(400);
+    throw new Error(`Order not Found `);
+  }
+
+  const item = order.items.id(itemId);
+  if (!item) {
+    res.status(400);
+    throw new Error("Item not found in the Order ");
+  }
+
+  const existingReturnOrder = await ReturnOrderModel.findOne({
+    orderId: order._id,
+    itemId: itemId,
+    userId: userId,
+  });
+  if (existingReturnOrder) {
+    res.status(400);
+    throw new Error("Return Order Already Requested, In Processing");
+  }
+
+  await ReturnOrderModel.create({
+    orderId: order._id,
+    userId,
+    productId: item.productId,
+    itemId: item._id,
+    reason,
+    remarks,
+    status: "requested",
+  });
+
+  await Order.findOneAndUpdate(
+    {
+      orderId,
+      userId,
+      "items._id": itemId,
+    },
+    {
+      $set: {
+        "items.$.status": "Return Requested",
+      },
+    }
+  );
+
+  res.status(201).json({ message: "order return requested successfully" });
+});
+
+

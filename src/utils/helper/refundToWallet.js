@@ -1,8 +1,8 @@
 import Wallet from "../../models/wallet/wallet-model.js";
 import {v4} from "uuid"
 
-export const processRefund = async (order, item, userId) => {
-    if (order.payment.method === "PayOnDelivery") return;
+export const processRefund = async (order, item, userId,description="refund from Fire Boots") => {
+    if (order.payment.method === "PayOnDelivery"&&item.status!=="Return Requested") return;
   
     let wallet = await Wallet.findOne({ user_id: userId });
     if (!wallet) {
@@ -26,7 +26,7 @@ export const processRefund = async (order, item, userId) => {
       transaction_id: v4(),
       status: "success",
       type: "credit",
-      description: `Refund for cancellation of item in order: ${order.orderId}`,
+      description
     });
     wallet.balance += refundAmount;
     await wallet.save();

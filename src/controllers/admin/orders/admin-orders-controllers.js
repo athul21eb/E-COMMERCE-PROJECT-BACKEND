@@ -77,7 +77,7 @@ const getOrderDetailsById = expressAsyncHandler(async (req, res) => {
   }
 });
 
-//// -------------------------------route => PATCH/v1/:id/orders/:itemId----------------------------------------------
+//// -------------------------------route => PATCH/v1/admin/orders/:id/items/:itemId/status----------------------------------------------
 ///* @desc   Change Item status
 ///? @access Private
 
@@ -149,7 +149,7 @@ const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
   if (status === "Cancelled") {
     item.cancelledDate = new Date();
 
-    await processRefund(order, item, order.userId);
+    await processRefund(order, item, order.userId,`Refund for cancellation of item in order: ${order.orderId}`);
 
     await restoreProductStock(item.productId, item.size, item.quantity);
   }
