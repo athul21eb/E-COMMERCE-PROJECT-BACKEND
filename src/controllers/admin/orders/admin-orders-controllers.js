@@ -182,6 +182,10 @@ const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
 });
 
 
+//// -------------------------------route => PATCH/v1/admin/orders/salesReport----------------------------------------------
+///* @desc   saleReport 
+///? @access Private
+
 const generateSaleReport = expressAsyncHandler(async (req, res) => {
   const { startDate, endDate, period, page = 1, limit = 10 } = req.query;
 
@@ -204,28 +208,175 @@ const generateSaleReport = expressAsyncHandler(async (req, res) => {
     throw new Error("Limit must be a positive integer.");
   }
 
-  try {
+  
     // Generate the sales report with pagination
-    const salesReport = await getSalesReport(startDate, endDate, period, pageNumber, limitNumber);
+    const salesReport = await getSalesReport(res,startDate, endDate, period, pageNumber, limitNumber);
 
     // Send response
     res.status(200).json({
       message: "Sales report generated successfully",
       salesReport,
     });
-  } catch (error) {
-    res.status(400).json({
-      message: error.message || "An error occurred while generating the sales report",
-    });
+  
+});
+
+//// -------------------------------route => PATCH/v1/admin/orders/xlsx-SalesReport-----------------------------------------------
+///* @desc   generateXlsxReport
+///? @access Private
+
+const generateXlsxReport = expressAsyncHandler(async (req, res) => {
+  const { startDate, endDate, period, page = 1, limit = 10 } = req.query;
+
+  const pageNumber = parseInt(page);
+  const limitNumber = parseInt(limit);
+
+  if ((!startDate || !endDate) && !period) {
+    res.status(400);
+    throw new Error("Either startDate, endDate, or period must be provided.");
   }
+
+  if (isNaN(pageNumber) || pageNumber <= 0) {
+    res.status(400);
+    throw new Error("Page number must be a positive integer.");
+  }
+
+  if (isNaN(limitNumber) || limitNumber <= 0) {
+    res.status(400);
+    throw new Error("Limit must be a positive integer.");
+  }
+
+  const reportData = await getSalesReport(res, startDate, endDate, period, pageNumber, limitNumber);
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Sales Report");
+
+  worksheet.columns = [
+    { header: "Order ID", key: "orderId", width: 30 },
+    { header: "Order Amount", key: "billAmount", width: 25 },
+    { header: "Coupon Discount", key: "appliedCouponAmount", width: 20 },
+    { header: "Discount on MRP", key: "productDiscount", width: 20 },
+    { header: "Date", key: "orderDate", width: 25 },
+  ];
+
+  reportData.orders.forEach((order) => {
+    worksheet.addRow({
+      orderId: order.orderId,
+      billAmount: order.billAmount,
+      appliedCouponAmount: order.appliedCouponAmount,
+      productDiscount: order.items.reduce((acc, item) => acc + (item.appliedOfferAmount || 0), 0),
+      orderDate: moment(order.orderDate).format("YYYY-MM-DD HH:mm:ss"),
+    });
+  });
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader("Content-Disposition", "attachment; filename=sales_report.xlsx");
+
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
+//// -------------------------------route => PATCH/v1/admin/orders/pdf-SalesReport----------------------------------------------
+///* @desc   generatePdfReport
+///? @access Private
+const generatePdfReport = expressAsyncHandler(async (req, res) => {
+  const { startDate, endDate, period, page = 1, limit = 10 } = req.query;
+
+  const pageNumber = parseInt(page);
+  const limitNumber = parseInt(limit);
+
+  if ((!startDate || !endDate) && !period) {
+    res.status(400);
+    throw new Error("Either startDate, endDate, or period must be provided.");
+  }
+
+  if (isNaN(pageNumber) || pageNumber <= 0) {
+    res.status(400);
+    throw new Error("Page number must be a positive integer.");
+  }
+
+  if (isNaN(limitNumber) || limitNumber <= 0) {
+    res.status(400);
+    throw new Error("Limit must be a positive integer.");
+  }
+
+  const reportData = await getSalesReport(res, startDate, endDate, period, pageNumber, limitNumber);
+
+  const doc = new PDFDocument({ margin: 40, size: "A4" });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=sales_report.pdf");
+
+  doc.pipe(res);
+
+  // Add Title
+  doc.fontSize(22).text("Sales Report", { align: "center", underline: true });
+  doc.moveDown(2);
+
+  // Add Summary
+  doc.fontSize(12).text(`Sales Count: ${reportData.overallSalesCount}`);
+  doc.fontSize(12).text(`Order Amount: ${reportData.overallOrderAmount}`);
+  doc.fontSize(12).text(`Discount: ${reportData.overallDiscount}`);
+  doc.fontSize(12).text(`Discount on MRP: ${reportData.totalDiscountOnMRP}`);
+  doc.moveDown(2);
+
+  // Table Headers
+  const tableTop = doc.y;
+  const columnWidth = {
+    orderId: 80,
+    orderDate: 130,
+    billAmount: 100,
+    appliedCouponAmount: 100,
+    productDiscount: 130,
+  };
+  const rowHeight = 25;
+  const headerBgColor = "#f2f2f2";
+
+  doc.rect(30, tableTop, 570, rowHeight).fill(headerBgColor).stroke();
+
+  doc
+    .fillColor("black")
+    .fontSize(14)
+    .text("Order ID", 35, tableTop + 10, { width: columnWidth.orderId, align: "left" })
+    .text("Date", 35 + columnWidth.orderId, tableTop + 10, { width: columnWidth.orderDate, align: "left" })
+    .text("Order Amount", 35 + columnWidth.orderId + columnWidth.orderDate, tableTop + 10, { width: columnWidth.billAmount, align: "right" })
+    .text("Coupon Discount", 35 + columnWidth.orderId + columnWidth.orderDate + columnWidth.billAmount, tableTop + 10, { width: columnWidth.appliedCouponAmount, align: "right" })
+    .text("Discount on MRP", 35 + columnWidth.orderId + columnWidth.orderDate + columnWidth.billAmount + columnWidth.appliedCouponAmount, tableTop + 10, { width: columnWidth.productDiscount, align: "right" });
+
+  doc.moveDown(1);
+  doc.moveTo(30, doc.y).lineTo(600, doc.y).stroke();
+  doc.moveDown(1);
+
+  reportData.orders.forEach((order, index) => {
+    const y = doc.y;
+    const rowColor = index % 2 === 0 ? "#f9f9f9" : "#ffffff";
+    doc.rect(30, y, 570, rowHeight).fill(rowColor).stroke();
+
+    doc
+      .fillColor("black")
+      .fontSize(12)
+      .text(order.orderId, 35, y + 10, { width: columnWidth.orderId, align: "left" })
+      .text(moment(order.orderDate).format("YYYY-MM-DD HH:mm:ss"), 35 + columnWidth.orderId, y + 10, { width: columnWidth.orderDate, align: "left" })
+      .text(order.billAmount, 35 + columnWidth.orderId + columnWidth.orderDate, y + 10, { width: columnWidth.billAmount, align: "right" })
+      .text(order.appliedCouponAmount, 35 + columnWidth.orderId + columnWidth.orderDate + columnWidth.billAmount, y + 10, { width: columnWidth.appliedCouponAmount, align: "right" })
+      .text(order.items.reduce((acc, item) => acc + (item.appliedOfferAmount || 0), 0), 35 + columnWidth.orderId + columnWidth.orderDate + columnWidth.billAmount + columnWidth.appliedCouponAmount, y + 10, { width: columnWidth.productDiscount, align: "right" });
+
+    doc.moveDown(1);
+  });
+
+  doc.end();
 });
 
 
-export default generateSaleReport;
+
+
 
 export {
   getOrderDetailsById,
   getAllOrderData,
   updateOrderItemStatus,
   generateSaleReport,
+  downloadReport
 };

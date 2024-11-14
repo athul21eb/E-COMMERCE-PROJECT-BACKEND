@@ -2,6 +2,7 @@ import moment from "moment";
 import Order from "../../models/order/order-model.js";
 
 const getSalesReport = async (
+  res,
   startDate,
   endDate,
   period,
@@ -27,6 +28,7 @@ const getSalesReport = async (
     start = moment(startDate).startOf("day");
     end = moment(endDate).endOf("day");
   } else {
+    res.status(400)
     throw new Error("Invalid date range or period");
   }
 
@@ -56,6 +58,7 @@ console.log("End Date:", end.toDate());
 
   // If no orders are found
   if (orders.length === 0) {
+    res.status(400)
     throw new Error("No orders found for the given date range");
   }
 
@@ -78,6 +81,7 @@ console.log("End Date:", end.toDate());
       ),
     0
   );
+  
 
   // Calculate total pages
   const totalPages = Math.ceil(totalOrders / limit);
