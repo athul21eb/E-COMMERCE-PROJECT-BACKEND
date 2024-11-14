@@ -17,6 +17,8 @@ export const processRefund = async (order, item, userId,description="refund from
       const originalBillAmount = order.billAmount + order.appliedCouponAmount;
       const itemProportion = item.itemTotalPrice / originalBillAmount;
       refundAmount = Math.floor(itemProportion * order.billAmount);
+      order.appliedCouponAmount=0;
+      order.couponDetails=null;
     } else {
       refundAmount = item.itemTotalPrice;
     }

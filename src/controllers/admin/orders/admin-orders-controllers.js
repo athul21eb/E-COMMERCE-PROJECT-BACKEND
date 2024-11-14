@@ -4,6 +4,7 @@ import Products from "./../../../models/products/products-model.js";
 import { processRefund } from "../../../utils/helper/refundToWallet.js";
 import { restoreProductStock } from "../../../utils/helper/productRestock.js";
 import { v4 } from "uuid";
+import getSalesReport from "../../../utils/helper/saleReportGenerator.js";
 // -------------------------------route => GET/v1/orders----------------------------------------------
 ///* @desc   Get all orders (admin)
 ///? @access Private (Admin)
@@ -15,25 +16,26 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit) || 10; // Default to 10 orders per page if not provided
     const skip = (page - 1) * limit;
 
- // Fetch paginated orders
-const orders = await Order.find(
-  { orderStatus: { $ne: "Initiated" } },
-  { _id: false }
-)
-  .populate({
-    path: "items.productId",
-    populate: [
-      { path: "brand" },
-      { path: "category" }, // Assuming your Product model has a category field
-    ],
-  })
-  .sort({ createdAt: -1 })
-  .skip(skip)
-  .limit(limit);
+    // Fetch paginated orders
+    const orders = await Order.find(
+      { orderStatus: { $ne: "Initiated" } },
+      { _id: false }
+    )
+      .populate({
+        path: "items.productId",
+        populate: [
+          { path: "brand" },
+          { path: "category" }, // Assuming your Product model has a category field
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-// Count total number of orders
-const totalOrders = await Order.countDocuments({ orderStatus: { $ne: "Initiated" } });
-
+    // Count total number of orders
+    const totalOrders = await Order.countDocuments({
+      orderStatus: { $ne: "Initiated" },
+    });
 
     res.status(200).json({
       message: "Orders fetched successfully",
@@ -149,7 +151,12 @@ const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
   if (status === "Cancelled") {
     item.cancelledDate = new Date();
 
-    await processRefund(order, item, order.userId,`Refund for cancellation of item in order: ${order.orderId}`);
+    await processRefund(
+      order,
+      item,
+      order.userId,
+      `Refund for cancellation of item in order: ${order.orderId}`
+    );
 
     await restoreProductStock(item.productId, item.size, item.quantity);
   }
@@ -174,4 +181,51 @@ const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
   res.status(200).json({ message: "Item status updated successfully", order });
 });
 
-export { getOrderDetailsById, getAllOrderData, updateOrderItemStatus };
+
+const generateSaleReport = expressAsyncHandler(async (req, res) => {
+  const { startDate, endDate, period, page = 1, limit = 10 } = req.query;
+
+  // Ensure page and limit are numbers and greater than 0
+  const pageNumber = parseInt(page);
+  const limitNumber = parseInt(limit);
+
+  if ((!startDate || !endDate) && !period) {
+    res.status(400);
+    throw new Error("Either startDate, endDate, or period must be provided.");
+  }
+
+  if (isNaN(pageNumber) || pageNumber <= 0) {
+    res.status(400);
+    throw new Error("Page number must be a positive integer.");
+  }
+
+  if (isNaN(limitNumber) || limitNumber <= 0) {
+    res.status(400);
+    throw new Error("Limit must be a positive integer.");
+  }
+
+  try {
+    // Generate the sales report with pagination
+    const salesReport = await getSalesReport(startDate, endDate, period, pageNumber, limitNumber);
+
+    // Send response
+    res.status(200).json({
+      message: "Sales report generated successfully",
+      salesReport,
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: error.message || "An error occurred while generating the sales report",
+    });
+  }
+});
+
+
+export default generateSaleReport;
+
+export {
+  getOrderDetailsById,
+  getAllOrderData,
+  updateOrderItemStatus,
+  generateSaleReport,
+};

@@ -264,6 +264,7 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
 
   await cart.save();
 
+
   // Respond with the updated cart
   res.status(200).json({
     message: "Cart retrieved successfully",

@@ -125,31 +125,7 @@ const orderSchema = new Schema(
   { timestamps: true }
 );
 
-// // Status priority
-// const statusPriority = {
-//   Pending: 1,
-//   Shipped: 2,
-//   Delivered: 3,
-//   Cancelled: 4,
-// };
 
-// // Method to update order status
-// orderSchema.methods.updateOrderStatus = async function () {
-//   const allCancelled = this.items.every((item) => item.status === "Cancelled");
-
-//   if (allCancelled) {
-//     this.orderStatus = "Cancelled";
-//   } else {
-//     const highestStatus = this.items.reduce((highest, item) => {
-//       return statusPriority[item.status] < statusPriority[highest]
-//         ? item.status
-//         : highest;
-//     }, "Pending"); // Updated default to "Pending"
-//     this.orderStatus = highestStatus;
-//   }
-
-//   await this.save();
-// };
 
 const Order = mongoose.model("Order", orderSchema);
 
