@@ -378,5 +378,6 @@ export {
   getAllOrderData,
   updateOrderItemStatus,
   generateSaleReport,
-  downloadReport
+  generatePdfReport,
+  generateXlsxReport
 };
