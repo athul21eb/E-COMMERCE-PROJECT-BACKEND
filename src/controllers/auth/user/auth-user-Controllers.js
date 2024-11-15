@@ -601,11 +601,6 @@ const updateUserDetails = asyncHandler(async (req, res) => {
   });
 });
 
-<<<<<<< HEAD
-=======
-///hello 44444
->>>>>>> feature
-
 
 
 //// -------------------------------exports----------------------------------------------
