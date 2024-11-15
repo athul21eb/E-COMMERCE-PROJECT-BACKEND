@@ -3,6 +3,8 @@ import BrandModel from "../../models/brand/brand-model.js";
 import Category from "../../models/category/category-model.js";
 import expressAsyncHandler from "express-async-handler";
 import mongoose from "mongoose";
+import wishList from '../../models/wishList/wishlist-model.js'
+import Order from "../../models/order/order-model.js";
 
 export const getAllProductsWithFilters = expressAsyncHandler(
   async (req, res) => {
@@ -324,14 +326,15 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
 });
 
 
-////----------------------------- Get new arrivals
+////----------------------------- Get new arrivals--------------------
+
+
 export const getNewArrivals = expressAsyncHandler(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const skip = (page - 1) * limit;
-  const now = new Date();
 
+  // Get new arrivals
   const newArrivals = await Products.find({
-    // createdAt: { $gte: new Date(now.setDate(now.getDate() - 60)) }, // New arrivals in the last 30 days
     deletedAt: { $exists: false },
     isActive: true,
   })
@@ -345,7 +348,8 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     .populate({
       path: "brand",
       match: { isActive: true },
-    }).populate("offer");
+    })
+    .populate("offer");
 
   const activeProducts = newArrivals.filter(
     (product) => product.category && product.brand
@@ -356,13 +360,66 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     throw new Error("No new arrivals found");
   }
 
+  // Get the two most wishlisted products
+  let mostWishlistedProducts = await wishList.aggregate([
+    { $unwind: "$products" },
+    { $group: { _id: "$products", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 2 },
+    {
+      $lookup: {
+        from: "products", // Assuming the products collection is named 'products'
+        localField: "_id",
+        foreignField: "_id",
+        as: "productDetails",
+      },
+    },
+    { $unwind: "$productDetails" },
+    { $replaceRoot: { newRoot: "$productDetails" } },
+  ]);
+console.log(mostWishlistedProducts.length,'iiiiiiiiiiiiiiiiiiiiiiiiii')
+  // If no wishlisted products, take two from new arrivals
+  if (!mostWishlistedProducts.length<2) {
+    mostWishlistedProducts = activeProducts.slice(0, 2);
+  }
+
+  // Get the two most delivered products
+  let mostDeliveredProducts = await Order.aggregate([
+    { $unwind: "$items" },
+    { $match: { "items.status": "Delivered" } },
+    { $group: { _id: "$items.productId", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 2 },
+    {
+      $lookup: {
+        from: "products", // Assuming the products collection is named 'products'
+        localField: "_id",
+        foreignField: "_id",
+        as: "productDetails",
+      },
+    },
+    { $unwind: "$productDetails" },
+    { $replaceRoot: { newRoot: "$productDetails" } },
+  ]);
+  console.log(mostDeliveredProducts.length,'kkkkkkkkkkkkkkkkkkkkkkkk')
+  // If no delivered products, take two from new arrivals
+  if (!mostDeliveredProducts.length<2) {
+
+    mostDeliveredProducts = activeProducts.slice(2, 4);
+  }
+
+  // Return the response with new arrivals, most wishlisted, and most delivered products
   res.status(200).json({
-    message: "New arrivals retrieved successfully",
-    products: activeProducts,
+    message: "New arrivals, most wishlisted, and most delivered products retrieved successfully",
+    newArrivals: activeProducts,
+    mostWishlisted: mostWishlistedProducts,
+    mostDelivered: mostDeliveredProducts,
     page: Number(page),
     limit: Number(limit),
   });
 });
+
+
 
 // Get products by category with pagination
 export const getProductsByCategory = expressAsyncHandler(async (req, res) => {

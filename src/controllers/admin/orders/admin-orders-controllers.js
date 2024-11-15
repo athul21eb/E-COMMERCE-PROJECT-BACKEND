@@ -4,7 +4,7 @@ import Products from "./../../../models/products/products-model.js";
 import { processRefund } from "../../../utils/helper/refundToWallet.js";
 import { restoreProductStock } from "../../../utils/helper/productRestock.js";
 import { v4 } from "uuid";
-import getSalesReport from "../../../utils/helper/saleReportGenerator.js";
+import getSalesReport, { getFullSalesReport } from "../../../utils/helper/saleReportGenerator.js";
 // -------------------------------route => GET/v1/orders----------------------------------------------
 ///* @desc   Get all orders (admin)
 ///? @access Private (Admin)
@@ -186,7 +186,7 @@ const updateOrderItemStatus = expressAsyncHandler(async (req, res) => {
 ///* @desc   saleReport 
 ///? @access Private
 
-const generateSaleReport = expressAsyncHandler(async (req, res) => {
+const generatePaginatedSaleReport = expressAsyncHandler(async (req, res) => {
   const { startDate, endDate, period, page = 1, limit = 10 } = req.query;
 
   // Ensure page and limit are numbers and greater than 0
@@ -209,17 +209,36 @@ const generateSaleReport = expressAsyncHandler(async (req, res) => {
   }
 
   
-    // Generate the sales report with pagination
-    const salesReport = await getSalesReport(res,startDate, endDate, period, pageNumber, limitNumber);
+  // Generate the sales report with pagination
+const { orders, totalOrders } = await getSalesReport(res, startDate, endDate, period, pageNumber, limitNumber);
 
     // Send response
     res.status(200).json({
       message: "Sales report generated successfully",
-      salesReport,
+      salesReport:{ orders, totalOrders },
     });
   
 });
 
+
+
+//// -------------------------------route => PATCH/v1/admin/orders/salesReport----------------------------------------------
+///* @desc   saleReport 
+///? @access Private
+
+const generateSaleReportForDownload = expressAsyncHandler(async (req, res) => {
+  
+  
+
+  
+  // Generate the sales report with pagination
+const salesReport = await getFullSalesReport(res);  // Send response
+    res.status(200).json({
+      message: "Sales report generated successfully",
+      salesReport
+    });
+  
+});
 //// -------------------------------route => PATCH/v1/admin/orders/xlsx-SalesReport-----------------------------------------------
 ///* @desc   generateXlsxReport
 ///? @access Private
@@ -377,7 +396,8 @@ export {
   getOrderDetailsById,
   getAllOrderData,
   updateOrderItemStatus,
-  generateSaleReport,
+  generatePaginatedSaleReport,
   generatePdfReport,
-  generateXlsxReport
+  generateXlsxReport,
+  generateSaleReportForDownload
 };

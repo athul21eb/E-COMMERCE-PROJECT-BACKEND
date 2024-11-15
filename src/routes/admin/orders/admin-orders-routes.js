@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
-  generateSaleReport,
+  generatePaginatedSaleReport,
+  generateSaleReportForDownload,
   getAllOrderData,
   getOrderDetailsById,
   updateOrderItemStatus,
@@ -9,7 +10,8 @@ import {
 const orderRouter = Router();
 
 orderRouter.get("/", getAllOrderData);
-orderRouter.get("/salesReport", generateSaleReport);
+orderRouter.get("/salesReport", generatePaginatedSaleReport);
+orderRouter.get("/salesReport-download",generateSaleReportForDownload);
 orderRouter.get("/:id", getOrderDetailsById);
 orderRouter.patch("/:id/items/:itemId/status", updateOrderItemStatus);
 
