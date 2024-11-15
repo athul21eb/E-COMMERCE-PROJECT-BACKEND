@@ -1,45 +1,39 @@
-const notFoundRoute = (req, res,next) => {
+const notFoundRoute = (req, res, next) => {
+  const error = new Error(
+    `Not found the Page-   ${req.originalUrl} with  ${req.method} request method `
+  );
 
-    const error = new Error(`Not found the Page-   ${req.originalUrl} with  ${req.method} request method `);
+  res.status(404);
 
-    res.status(404);
+  next(error);
+};
 
-    next(error);
+const errorHandler = (err, req, res, next) => {
+  
+   if(process.env.NODE_ENV === "development") console.log(err);
 
-}
+  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  let message = err.message || "internal Server Error";
 
-const errorHandler = (err,req,res,next)=>{
+  if (err.name === "CastError" && err.kind === "ObjectId") {
+    statusCode = 404;
+    message = "Resource not found";
+  }
 
-    let statusCode = res.statusCode ===200? 500 :res.statusCode;
-    let message = err.message||"internal Server Error";
+  if (err.code === 11000) {
+    statusCode = 400;
+    message = message || "Email   already in use ";
+  }
 
-    if (err.name === "ValidationError") {
-        // Catch Mongoose validation errors
-       return res.status(400).json({
-          message: "Validation Error",
-          errors: Object.values(err.errors).map((errr) => errr.message),
-        });
-      }
+  if (err.name === "ValidationError") {
+    statusCode = 400;
+    message = Object.values(err?.errors).map((errr) => errr?.message);
+  }
 
-    if(err.name ==="CastError" && err.kind ==="ObjectId"){
-        statusCode = 404;
-        message ='Resource not found';
-    }
+  res.status(statusCode).json({
+    message: message,
+    stack: process.env.NODE_ENV === "development" && (err.stack || err),
+  });
+};
 
-    if(err.code===11000){
-        statusCode = 400;
-        message = 'Email   already in use ';
-    }
-
-
-
-
-
-     res.status(statusCode).json({
-        message:message,
-        stack:process.env.NODE_ENV ==="development"&&err.stack,
-    });
-
-}
-
-export {errorHandler,notFoundRoute}
+export { errorHandler, notFoundRoute };

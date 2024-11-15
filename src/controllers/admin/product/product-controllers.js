@@ -41,8 +41,11 @@ const createProduct = expressAsyncHandler(async (req, res) => {
   const existingProduct = await Products.findOne({
     productName: transformedProductName,
   });
+
   if (existingProduct) {
+
     res.status(400);
+    
     throw new Error("Product already exists");
   }
   
@@ -78,10 +81,30 @@ stock.sort((a, b) => b.size - a.size);
 ///* @desc   Get all products
 ///? @access Private
 
+
+// Helper function for sorting
+function getSortOptions(sortBy) {
+  switch (sortBy) {
+    case "aA-zZ":
+      return { productName: 1 };
+    case "zZ-aA":
+      return { productName: -1 };
+    case "Price: Low to High":
+      return { salePrice: 1 };
+    case "Price: High to Low":
+      return { salePrice: -1 };
+    case "Newest":
+      return { createdAt: -1 };
+    default:
+      return { createdAt: 1 };
+  }
+}
+
 const getProducts = expressAsyncHandler(async (req, res) => {
   const page = Number(req.query.page) || 1; // Current page number, default to 1
   const limit = Number(req.query.limit) || 10; // Products per page, default to 10
   const skip = (page - 1) * limit; // Calculate how many products to skip
+  const sortBy = getSortOptions(req.query.sortBy)||"";
 
   const totalProductsCount = await Products.countDocuments({
     deletedAt: { $exists: false }, // Exclude soft-deleted products
@@ -92,6 +115,8 @@ const getProducts = expressAsyncHandler(async (req, res) => {
   })
     .populate("category")
     .populate("brand")
+    .populate("offer")
+    .sort(sortBy)
     .skip(skip) // Skip the necessary products
     .limit(limit); // Limit the number of products retrieved
 

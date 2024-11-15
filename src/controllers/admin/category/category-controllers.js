@@ -68,8 +68,8 @@ const getCategories = expressAsyncHandler(async (req, res) => {
     deletedAt: { $exists: false },
   })
     .skip(skip) // Skip the necessary categories
-    .limit(limit); // Limit the number of categories retrieved
-
+    .limit(limit) // Limit the number of categories retrieved
+    .populate("offer");
   if (!categories.length) {
     res.status(404);
     throw new Error("No categories found");

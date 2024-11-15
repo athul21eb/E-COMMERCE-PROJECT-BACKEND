@@ -6,6 +6,8 @@ import customerRouter from "./customers/customers-router.js";
 import orderRouter from "./orders/admin-orders-routes.js";
 import bannerRouter from "./banner/banner-routes.js";
 import offerRouter from "./offers/offers-router.js";
+import CouponRouter from "./coupons/coupons-router.js";
+import ReturnOrderRouter from "./returnOrders/return-orders-routes.js";
 
 const AdminRouter = Router();
 
@@ -41,9 +43,12 @@ AdminRouter.use('/banners',bannerRouter)
 
 AdminRouter.use('/offers',offerRouter)
 
+////-----------------------------------------------Admin coupons Routers----------------------------
 
+AdminRouter.use('/coupons',CouponRouter)
+////-----------------------------------------------admin return order routes-------------------
 
-
+AdminRouter.use("/return-orders",ReturnOrderRouter);
 
 
 
