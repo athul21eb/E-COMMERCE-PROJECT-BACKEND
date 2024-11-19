@@ -2,14 +2,16 @@ import asyncHandler from "express-async-handler";
 import UserModel from "../../../models/user/user-model.js";
 import { sendOTP } from "../../../utils/OTP/OTP-verification.js";
 import OtpModel from "../../../models/otp/otp-model.js";
+import {v4} from 'uuid'
 import jwt from "jsonwebtoken";
 import {
   generateAccessToken,
   generateRefreshToken,
 } from "../../../utils/JWT/generate-JWT.js";
+import Wallet from "../../../models/wallet/wallet-model.js";
 
 //// -------------------------------route => POST/v1/auth/user/google-signIn----------------------------------------------
-///* @desc  sigle sign on using google auth
+///* @desc  single sign on using google auth
 ///? @access Public
 
 const googleSignIn = asyncHandler(async (req, res) => {
@@ -31,16 +33,7 @@ const googleSignIn = asyncHandler(async (req, res) => {
 
     // Case 1: User exists and has already linked their Google account
     if (user.googleId && user.googleId === uid) {
-      const {
-        _id,
-        firstName,
-        lastName,
-        mobile_no,
-        DOB,
-        role,photo,
-        isVerified,
-        isBlocked,
-      } = user;
+      const { referral } = user;
 
       // Generate tokens
       const accessToken = await generateAccessToken({
@@ -58,14 +51,17 @@ const googleSignIn = asyncHandler(async (req, res) => {
         message: "User  logged in successfully using Google Sign-in",
         user: {
           _id,
-        firstName,
-        lastName,
-        mobile_no,
-        DOB,email,
-        role,photo,
-        isVerified,
-        isBlocked,
+          firstName,
+          lastName,
+          mobile_no,
+          DOB,
+          email,
+          role,
+          photo,
+          isVerified,
+          isBlocked,
           accessToken,
+          referral,
         },
       });
     }
@@ -78,16 +74,7 @@ const googleSignIn = asyncHandler(async (req, res) => {
       user.photo = photoURL; // Optional: update profile picture
       await user.save();
 
-      const {
-        _id,
-        firstName,
-        lastName,
-        mobile_no,
-        DOB,
-        role,photo,
-        isVerified,
-        isBlocked,
-      } = user;
+      const { referral } = user;
 
       // Generate tokens
       const accessToken = await generateAccessToken({
@@ -105,14 +92,17 @@ const googleSignIn = asyncHandler(async (req, res) => {
         message: "Google account linked, user  logged in successfully",
         user: {
           _id,
-        firstName,
-        lastName,
-        mobile_no,
-        DOB,email,
-        role,photo,
-        isVerified,
-        isBlocked,
+          firstName,
+          lastName,
+          mobile_no,
+          DOB,
+          email,
+          role,
+          photo,
+          isVerified,
+          isBlocked,
           accessToken,
+          referral,
         },
       });
     }
@@ -143,11 +133,17 @@ const googleSignIn = asyncHandler(async (req, res) => {
     lastName,
     mobile_no,
     DOB,
-    role,photo,
+    role,
+    photo,
     isVerified,
-    isBlocked, 
-  } =
-    user;
+    isBlocked,
+    referral
+  } = user;
+
+  await Wallet.create({
+    user_id: _id,
+    balance: 0,
+  });
 
   // Generate tokens
   const accessToken = await generateAccessToken({
@@ -165,14 +161,17 @@ const googleSignIn = asyncHandler(async (req, res) => {
     message: "New user created, verified, and logged in using Google Sign-in",
     user: {
       _id,
-        firstName,
-        lastName,
-        mobile_no,
-        DOB,email,
-        role,photo,
-        isVerified,
-        isBlocked,
+      firstName,
+      lastName,
+      mobile_no,
+      DOB,
+      email,
+      role,
+      photo,
+      isVerified,
+      isBlocked,
       accessToken,
+      referral
     },
   });
 });
@@ -196,7 +195,7 @@ const login = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error(`${loginUser.firstName} please use google sign in !`);
   }
-  
+
   //// checking =>   find  user with given credentials and checking the password match
   if (loginUser && (await loginUser.matchPassword(password))) {
     if (loginUser.isBlocked) {
@@ -206,13 +205,15 @@ const login = asyncHandler(async (req, res) => {
 
     const {
       _id,
-        firstName,
-        lastName,
-        mobile_no,
-        DOB,
-        role,photo,
-        isVerified,
-        isBlocked,
+      firstName,
+      lastName,
+      mobile_no,
+      DOB,
+      role,
+      photo,
+      isVerified,
+      isBlocked,
+      referral,
     } = loginUser;
 
     if (isVerified) {
@@ -235,11 +236,14 @@ const login = asyncHandler(async (req, res) => {
           firstName,
           lastName,
           mobile_no,
-          DOB,email,
-          role,photo,
+          DOB,
+          email,
+          role,
+          photo,
           isVerified,
           isBlocked,
           accessToken,
+          referral,
         },
       });
     } else {
@@ -273,7 +277,8 @@ const logout = asyncHandler(async (req, res) => {
 ///? @access Public
 
 const signUp = asyncHandler(async (req, res) => {
-  const { firstName, lastName, password, email, mobile_no } = req.body;
+  const { firstName, lastName, password, email, mobile_no, referral } =
+    req.body;
 
   ////validation
   if (!firstName || !lastName || !password || !email || !mobile_no) {
@@ -295,6 +300,14 @@ const signUp = asyncHandler(async (req, res) => {
     throw new Error("user email already existed");
   }
 
+  let referralBy;
+  if (referral) {
+    referralBy = await UserModel.findOne({ referral });
+    if (!referralBy) {
+      res.status(400);
+      throw new Error(`referral Code  not valid `);
+    }
+  }
   // checking => is there any existing user with same mobile_no in database
   // const existingUser = await UserModel.findOne({ mobile_no });
 
@@ -310,6 +323,7 @@ const signUp = asyncHandler(async (req, res) => {
     password,
     email,
     mobile_no,
+    referralBy: referralBy ? referralBy._id : null,
   });
 
   if (createdUser) {
@@ -413,10 +427,18 @@ const verifyOtp = asyncHandler(async (req, res) => {
         lastName,
         mobile_no,
         DOB,
-        role,photo,
+        role,
+        photo,
         isVerified,
         isBlocked,
+        referral,
+        referralBy,
       } = verifiedUser;
+
+      await Wallet.create({
+        user_id: _id,
+        balance: 0,
+      });
 
       //// generate tokens
       const accessToken = await generateAccessToken({
@@ -430,18 +452,42 @@ const verifyOtp = asyncHandler(async (req, res) => {
         role,
       });
 
+      if (referralBy) {
+        ////referredBonus
+        let wallet = await Wallet.findOne({ user_id: referralBy });
+        if (!wallet) {
+          wallet = await Wallet.create({
+            user_id: referralBy,
+            balance: 0,
+          });
+        }
+
+        wallet.transactions.push({
+          amount: 500,
+          transaction_id: v4(),
+          status: "success",
+          type: "credit",
+          description: `referral Bonus for referring ${firstName}`,
+        });
+        wallet.balance += 500;
+        await wallet.save();
+      }
+
       res.json({
         message: "User Verified successfully",
         user: {
           _id,
-        firstName,
-        lastName,
-        mobile_no,
-        DOB,email,
-        role,photo,
-        isVerified,
-        isBlocked,
+          firstName,
+          lastName,
+          mobile_no,
+          DOB,
+          email,
+          role,
+          photo,
+          isVerified,
+          isBlocked,
           accessToken,
+          referral,
         },
       });
     } else {
@@ -540,10 +586,18 @@ const resetPassword = asyncHandler(async (req, res) => {
 ///? @access Private (User must be authenticated)
 
 const updateUserDetails = asyncHandler(async (req, res) => {
-  const { firstName, lastName, dob,  mobile, newPassword, confirmPassword, photo } = req.body;
+  const {
+    firstName,
+    lastName,
+    dob,
+    mobile,
+    newPassword,
+    confirmPassword,
+    photo,
+  } = req.body;
 
   // Validate required fields
-  if (!firstName || !lastName || !dob  || !mobile) {
+  if (!firstName || !lastName || !dob || !mobile) {
     res.status(400);
     throw new Error("All fields are required");
   }
@@ -561,21 +615,15 @@ const updateUserDetails = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
- 
-
- 
-
   // Update the user's details
   user.firstName = firstName;
   user.lastName = lastName;
   user.DOB = dob;
- 
+
   user.mobile_no = mobile;
 
-
   if (newPassword) {
-
-    if(await user.matchPassword(newPassword)){
+    if (await user.matchPassword(newPassword)) {
       res.status(400);
       throw new Error("Can't Set Old password as a new password ");
     }
@@ -591,7 +639,6 @@ const updateUserDetails = asyncHandler(async (req, res) => {
   res.status(200).json({
     message: "User details updated successfully",
     user: {
-      
       firstName: updatedUser.firstName,
       lastName: updatedUser.lastName,
       DOB: updatedUser.DOB,
@@ -600,8 +647,6 @@ const updateUserDetails = asyncHandler(async (req, res) => {
     },
   });
 });
-
-
 
 //// -------------------------------exports----------------------------------------------
 
@@ -614,6 +659,5 @@ export {
   verifyOtp,
   resendToken,
   resetPassword,
-  updateUserDetails
-  
+  updateUserDetails,
 };

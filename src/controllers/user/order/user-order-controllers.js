@@ -244,10 +244,10 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
     /////------PayOnDelivery--------
     case "PayOnDelivery":
       // Check if the bill amount exceeds ₹1000
-      // if (billAmount > 1000) {
-      //   res.status(400);
-      //   throw new Error("Cash on Delivery is not available for purchases of ₹1000 or more");
-      // }
+      if (billAmount > 1000) {
+        res.status(400);
+        throw new Error("Cash on Delivery is not available for purchases of ₹1000 or more");
+      }
 
       // Update the status of verified items to "Confirm"
       for (const item of verifiedItems) {

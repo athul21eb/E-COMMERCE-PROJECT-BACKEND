@@ -1,5 +1,5 @@
 import expressAsyncHandler from "express-async-handler";
-import Wishlist from "../../../models/wishlist/wishlist-model.js";
+import Wishlist from "../../../models/wishList/wishlist-model.js";
 import Product from "../../../models/products/products-model.js";
 import Cart from "../../../models/cart/cart-model.js";
 

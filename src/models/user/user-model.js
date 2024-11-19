@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import { v4 as uuidv4 } from "uuid";
 import { addressSchema } from "./address/address-model.js";
+import User from "../user/user-model.js";
 const Schema = mongoose.Schema;
 
 const userSchema = new Schema({
@@ -23,7 +25,7 @@ const userSchema = new Schema({
   },
   DOB: {
     type: Date,
-    default: '',
+    default: "",
   },
   email: {
     type: String,
@@ -42,6 +44,16 @@ const userSchema = new Schema({
   isVerified: {
     type: Boolean,
     default: false,
+  },
+  referral: {
+    type: String,
+    required: true,
+    unique: true,
+    default: () => uuidv4().split("-")[0].toUpperCase(),
+  },
+  referralBy: {
+    type: mongoose.SchemaTypes.ObjectId,
+    ref: "User",
   },
   role: {
     type: String,
