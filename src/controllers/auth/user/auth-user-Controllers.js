@@ -2,7 +2,7 @@ import asyncHandler from "express-async-handler";
 import UserModel from "../../../models/user/user-model.js";
 import { sendOTP } from "../../../utils/OTP/OTP-verification.js";
 import OtpModel from "../../../models/otp/otp-model.js";
-import {v4} from 'uuid'
+import { v4 } from "uuid";
 import jwt from "jsonwebtoken";
 import {
   generateAccessToken,
@@ -33,7 +33,20 @@ const googleSignIn = asyncHandler(async (req, res) => {
 
     // Case 1: User exists and has already linked their Google account
     if (user.googleId && user.googleId === uid) {
-      const { referral } = user;
+      const {
+        _id,
+        firstName,
+        lastName,
+        mobile_no,
+        DOB,
+        email,
+        role,
+        photo,
+        isVerified,
+        isBlocked,
+
+        referral,
+      } = user;
 
       // Generate tokens
       const accessToken = await generateAccessToken({
@@ -74,7 +87,20 @@ const googleSignIn = asyncHandler(async (req, res) => {
       user.photo = photoURL; // Optional: update profile picture
       await user.save();
 
-      const { referral } = user;
+      const {
+        _id,
+        firstName,
+        lastName,
+        mobile_no,
+        DOB,
+        email,
+        role,
+        photo,
+        isVerified,
+        isBlocked,
+
+        referral,
+      } = user;
 
       // Generate tokens
       const accessToken = await generateAccessToken({
@@ -137,7 +163,7 @@ const googleSignIn = asyncHandler(async (req, res) => {
     photo,
     isVerified,
     isBlocked,
-    referral
+    referral,
   } = user;
 
   await Wallet.create({
@@ -171,7 +197,7 @@ const googleSignIn = asyncHandler(async (req, res) => {
       isVerified,
       isBlocked,
       accessToken,
-      referral
+      referral,
     },
   });
 });

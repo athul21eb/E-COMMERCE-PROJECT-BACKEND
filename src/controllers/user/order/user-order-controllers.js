@@ -11,6 +11,7 @@ import { razorPay } from "../../../config/razorpay.js";
 import { processRefund } from "../../../utils/helper/refundToWallet.js";
 import { restoreProductStock } from "../../../utils/helper/productRestock.js";
 import ReturnOrderModel from "../../../models/returnOrder/return-order-model.js";
+import processOrderPostPlacement from "../../../utils/helper/postOrderUpdates.js";
 
 // //-------------------------------route => POST/v1/orders/create----------------------------------------------
 ///* @desc   Create a new order
@@ -246,7 +247,9 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
       // Check if the bill amount exceeds ₹1000
       if (billAmount > 1000) {
         res.status(400);
-        throw new Error("Cash on Delivery is not available for purchases of ₹1000 or more");
+        throw new Error(
+          "Cash on Delivery is not available for purchases of ₹1000 or more"
+        );
       }
 
       // Update the status of verified items to "Confirm"
@@ -271,31 +274,9 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
       });
 
       if (order) {
-        //  if there is in coupon put user id in usage history
-        if (appliedCouponAmount && cart.appliedCoupon?.code) {
-          await Coupon.findOneAndUpdate(
-            {
-              code: cart.appliedCoupon?.code,
-            },
-            {
-              $push: { usageRecords: { user: userId, usedAt: currentDate } },
-            }
-          );
-        }
 
-        // Clear the user's cart after the order is successfully placed
-        await Cart.findOneAndUpdate(
-          { user: userId },
-          { $set: { items: [], appliedCoupon: null } }
-        );
+        await processOrderPostPlacement(order,userId,res);
 
-        // Decrease the product stock for each item in the order
-        for (const item of verifiedItems) {
-          await Products.findOneAndUpdate(
-            { _id: item.productId, "stock.size": item.size },
-            { $inc: { "stock.$.stock": -item.quantity } }
-          );
-        }
 
         // Respond with success message
         res.status(200).json({
@@ -387,31 +368,7 @@ export const createOrder = expressAsyncHandler(async (req, res) => {
         wallet.balance -= billAmount;
         await wallet.save();
 
-        //  if there is in coupon put user id in usage history
-        if (appliedCouponAmount && cart.appliedCoupon?.code) {
-          await Coupon.findOneAndUpdate(
-            {
-              code: cart.appliedCoupon?.code,
-            },
-            {
-              $push: { usageRecords: { user: userId, usedAt: currentDate } },
-            }
-          );
-        }
-
-        // Clear the user's cart after the order is successfully placed
-        await Cart.findOneAndUpdate(
-          { user: userId },
-          { $set: { items: [], appliedCoupon: null } }
-        );
-
-        // Decrease the product stock for each item in the order
-        for (const item of verifiedItems) {
-          await Products.findOneAndUpdate(
-            { _id: item.productId, "stock.size": item.size },
-            { $inc: { "stock.$.stock": -item.quantity } }
-          );
-        }
+        await processOrderPostPlacement(orderByWallet,userId,res);
 
         // Respond with success message
         res.status(200).json({
@@ -457,6 +414,14 @@ export const verifyPayment = expressAsyncHandler(async (req, res) => {
       item.status = "Failed";
     }
     await order.save();
+    await Cart.findOneAndUpdate(
+      {
+        user: req.user.id,
+      },
+      {
+        $set: { items: [] },
+      }
+    );
     res.status(400);
     throw new Error(
       `'Failed to place the order due to payment failure ,please try again'`
@@ -516,7 +481,7 @@ export const verifyPayment = expressAsyncHandler(async (req, res) => {
   }
 });
 
-// -------------------------------route => GET/v1/orders/user-orders----------------------------------------------
+//// -------------------------------route => GET/v1/orders/user-orders----------------------------------------------
 // /* @desc   Get all orders for a specific user
 // /* @access Private
 
@@ -623,7 +588,12 @@ export const cancelOrderItem = expressAsyncHandler(async (req, res) => {
   item.status = "Cancelled";
   item.cancelledDate = new Date();
   // Process refund if applicable
-  await processRefund(order, item, userId,`Refund for cancellation of item in order: ${order.orderId}`);
+  await processRefund(
+    order,
+    item,
+    userId,
+    `Refund for cancellation of item in order: ${order.orderId}`
+  );
 
   // Save the order with the updated item status
   await order.save();
@@ -722,4 +692,160 @@ export const returnOrderItem = expressAsyncHandler(async (req, res) => {
   res.status(201).json({ message: "order return requested successfully" });
 });
 
+// //-------------------------------route => POST/v1/orders/retry-payment/:orderId----------------------------------------------
+///* @desc   retry payment
+///? @access Private
 
+
+export const retryPayment = expressAsyncHandler(async (req, res) => {
+  const { retryMethod, shippingAddress } = req.body;
+  const { orderId } = req.params;
+
+
+  if (!retryMethod || !orderId) {
+    res.status(400);
+    throw new Error(`retryPaymentMethod and orderId is required`);
+  }
+
+  const validPaymentMethods = ["RazorPay", "PayOnDelivery", "Wallet"];
+  if (!validPaymentMethods.includes(retryMethod)) {
+    res.status(400);
+    throw new Error("Payment method not valid");
+  }
+
+  const userId = req.user.id; // Extract user ID
+  
+  const order = await Order.findOne({ orderId,userId }).populate("items.productId");
+  if (!order) {
+    res.status(404);
+    throw new Error("Order not found");
+  }
+
+  const billAmount = order.billAmount; // Get the bill amount from the order
+ 
+
+  if (order.orderStatus !== "Failed") {
+    res.status(400);
+    throw new Error("Only failed orders can be retried");
+  }
+
+  if (shippingAddress) {
+    order.shippingAddress = shippingAddress;
+  }
+
+  order.orderDate = new Date();
+  //// -------- Razorpay --------
+  if (retryMethod === "RazorPay") {
+    try {
+      const RazorPayTxnId = v4();
+      const paymentOrder = await razorPay.orders.create({
+        amount: billAmount * 100,
+        currency: "INR",
+        receipt: RazorPayTxnId,
+      });
+
+      order.payment = {
+        status: "Pending",
+        method: "RazorPay",
+        transactionId: RazorPayTxnId,
+        gateway_order_id: paymentOrder.id,
+      };
+      order.orderStatus = "Initiated";
+      await order.save();
+
+      return res.status(200).json(paymentOrder);
+    } catch (error) {
+      res.status(500);
+      throw new Error("Failed to create Razorpay order");
+    }
+  }
+
+  //// -------- Wallet --------
+  if (retryMethod === "Wallet") {
+    const wallet = await Wallet.findOne({ user_id: userId });
+    if (!wallet) {
+      res.status(400);
+      throw new Error(`Create a Wallet First!`);
+    }
+
+    if (wallet.balance < billAmount) {
+      res.status(400);
+      throw new Error(
+        `Wallet balance - ₹${wallet.balance} lower than TotalPrice - ₹${billAmount}!`
+      );
+    }
+
+    order.items.forEach((item) => {
+      item.status = "Confirmed";
+    });
+
+    const walletTxnId = v4();
+
+    order.payment = {
+      status: "Success",
+      method: "Wallet",
+      transactionId: walletTxnId,
+    };
+    order.orderStatus = "Confirmed";
+
+    const orderByWallet = await order.save();
+
+    if (orderByWallet) {
+      wallet.transactions.push({
+        amount: billAmount,
+        transaction_id: walletTxnId,
+        status: "success",
+        type: "debit",
+        description: `payment for orderId: ${order.orderId}`,
+      });
+      wallet.balance -= billAmount;
+      await wallet.save();
+      await processOrderPostPlacement(order, userId, res);
+
+      return res.status(200).json({
+        message: `Order placed successfully with ${retryMethod}`,
+        order: orderByWallet,
+      });
+    } else {
+      res.status(400);
+      throw new Error("Failed to place order");
+    }
+  }
+
+  //// -------- Pay-on-Delivery --------
+  if (retryMethod === "PayOnDelivery") {
+    if (order.totalAmount > 1000) {
+      res.status(400);
+      throw new Error(
+        "Pay-on-Delivery is only available for orders under ₹1000"
+      );
+    }
+
+    order.items.forEach((item) => {
+      item.status = "Confirmed";
+    });
+
+    order.payment = {
+      status: "Pending",
+      method: "PayOnDelivery",
+    };
+    order.orderStatus = "Confirmed";
+
+    const orderByPayOnDelivery = await order.save();
+
+    if (orderByPayOnDelivery) {
+      await processOrderPostPlacement(order, userId, res);
+
+      return res.status(200).json({
+        message: `Order placed successfully with ${retryMethod}`,
+        order: orderByPayOnDelivery,
+      });
+    } else {
+      res.status(400);
+      throw new Error("Failed to place order");
+    }
+  }
+
+  res.status(400);
+  throw new Error("Invalid retry method");
+});
