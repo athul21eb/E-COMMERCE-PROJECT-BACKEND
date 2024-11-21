@@ -87,6 +87,40 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
       { $limit: 10 },
     ]);
 
+
+    const topCategories = await Order.aggregate([
+      { $match: { orderStatus: { $ne: "Initiated" }, ...dateFilter } }, // Filter orders
+      { $unwind: "$items" }, // Unwind items array
+      {
+        $lookup: {
+          from: "products", // Link to Products collection
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productDetails",
+        },
+      },
+      { $unwind: "$productDetails" },
+      {
+        $lookup: {
+          from: "categories", // Link to Categories collection
+          localField: "productDetails.category",
+          foreignField: "_id",
+          as: "categoryDetails",
+        },
+      },
+      { $unwind: "$categoryDetails" },
+      {
+        $group: {
+          _id: "$categoryDetails._id",
+          categoryName: { $first: "$categoryDetails.categoryName" },
+          categoryDescription: { $first: "$categoryDetails.categoryDescription" },
+          totalSold: { $sum: "$items.quantity" }, // Sum up quantities
+        },
+      },
+      { $sort: { totalSold: -1 } }, // Sort by totalSold in descending order
+      { $limit: 10 }, // Limit to top 10 categories
+    ]);
+
     // Fetch Top 10 Products by Sales
     const topProducts = await Order.aggregate([
       { $match: {orderStatus:{$ne:"Initiated"},...dateFilter} },  // Match orders within the date range
@@ -141,6 +175,7 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
       totalOrders,
       totalRevenue,
       totalProducts,
+      topCategories,
       topBrands,
       topProducts,
       pieData
