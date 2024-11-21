@@ -82,7 +82,7 @@ const userSchema = new Schema({
       default: Date.now,
     },
   },
-});
+},{timestamps:true});
 
 userSchema.index({ verificationExpires: 1 }, { expireAfterSeconds: 0 }); // TTL index
 

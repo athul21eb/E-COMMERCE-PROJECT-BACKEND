@@ -5,6 +5,7 @@ import {
   calculateCartTotals,
   getActiveCoupons,
 } from "../../../utils/helper/helper.js";
+import Wishlist from "../../../models/wishList/wishlist-model.js";
 
 // -------------------------------route => POST/v1/cart/add-to-cart----------------------------------------------
 ///* @desc   Add product to cart
@@ -89,9 +90,16 @@ const addToCart = expressAsyncHandler(async (req, res) => {
     }
   }
 
-  console.log(cartDetails, cart);
-
   await cart.save();
+
+  let InWishlist = await Wishlist.findOne({ userId, products: productId });
+
+  if (InWishlist) {
+    await Wishlist.findOneAndUpdate(
+      { userId },
+      { $pull: { products: productId } }
+    );
+  }
 
   await cart.populate({
     path: "items.productId",
@@ -183,8 +191,8 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
           $match: {
             deletedAt: { $exists: false }, // Not soft-deleted
             isActive: true, // Only active products
-         
-            _id:item.productId._id , // Exclude the current product
+
+            _id: item.productId._id, // Exclude the current product
           },
         },
         {
@@ -227,7 +235,9 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
         return null; // Product not found, return null so it can be filtered out
       }
 
-      const sizeStock = product[0]?.stock?.find((stock) => stock.size === item.size);
+      const sizeStock = product[0]?.stock?.find(
+        (stock) => stock.size === item.size
+      );
 
       if (!sizeStock) {
         return null; // Size not found, return null so it can be filtered out
@@ -248,7 +258,6 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
 
   const cartDetails = calculateCartTotals(cart);
 
-  
   // Check if the applied coupon is valid based on the cart total and the expiration date
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
@@ -263,7 +272,6 @@ const getCartWithStockAdjustment = expressAsyncHandler(async (req, res) => {
   }
 
   await cart.save();
-
 
   // Respond with the updated cart
   res.status(200).json({
@@ -311,7 +319,6 @@ const removeToCart = expressAsyncHandler(async (req, res) => {
 
   const cartDetails = calculateCartTotals(cart);
 
-  
   // Check if the applied coupon is valid based on the cart total and the expiration date
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
@@ -410,12 +417,9 @@ const updateToCart = expressAsyncHandler(async (req, res) => {
 
   const cartDetails = calculateCartTotals(cart);
 
- 
   // Check if the applied coupon is valid based on the cart total and the expiration date
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
-
-    
 
     // Check if the cart total is below the minimum purchase amount or coupon is expired
     if (
@@ -424,30 +428,28 @@ const updateToCart = expressAsyncHandler(async (req, res) => {
     ) {
       cart.appliedCoupon = null; // Remove the coupon
 
-  // Save the updated cart
-  await cart.save();
+      // Save the updated cart
+      await cart.save();
 
-  // Populate the updated cart to include product and brand details
-  // Populate appliedCoupon first
-  await cart.populate({
-    path: "appliedCoupon",
-    select: "code discount expirationDate maxDiscountAmount minPurchaseAmount",
-  });
+      // Populate the updated cart to include product and brand details
+      // Populate appliedCoupon first
+      await cart.populate({
+        path: "appliedCoupon",
+        select:
+          "code discount expirationDate maxDiscountAmount minPurchaseAmount",
+      });
 
-  // Then populate items.productId with offer, brand, and category
-  await cart.populate({
-    path: "items.productId",
-    populate: [
-      { path: "offer" },
-      { path: "brand" }, // Populate 'brand' field
-      { path: "category" }, // Populate 'category' field
-    ],
-  });
-
+      // Then populate items.productId with offer, brand, and category
+      await cart.populate({
+        path: "items.productId",
+        populate: [
+          { path: "offer" },
+          { path: "brand" }, // Populate 'brand' field
+          { path: "category" }, // Populate 'category' field
+        ],
+      });
     }
   }
-
-
 
   // Respond with the updated cart
   res.status(200).json({ message: "Product updated successfully", cart });

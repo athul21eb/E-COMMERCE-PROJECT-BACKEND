@@ -8,6 +8,7 @@ import bannerRouter from "./banner/banner-routes.js";
 import offerRouter from "./offers/offers-router.js";
 import CouponRouter from "./coupons/coupons-router.js";
 import ReturnOrderRouter from "./returnOrders/return-orders-routes.js";
+import DashBoardRouter from "./dashboard/dashboard-routes.js";
 
 const AdminRouter = Router();
 
@@ -50,6 +51,9 @@ AdminRouter.use('/coupons',CouponRouter)
 
 AdminRouter.use("/return-orders",ReturnOrderRouter);
 
+////-----------------------------------------------admin DashBoard routes-------------------
+
+AdminRouter.use("/dashboard",DashBoardRouter);
 
 
 
