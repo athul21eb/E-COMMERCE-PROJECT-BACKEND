@@ -3,7 +3,7 @@ import BrandModel from "../../models/brand/brand-model.js";
 import Category from "../../models/category/category-model.js";
 import expressAsyncHandler from "express-async-handler";
 import mongoose from "mongoose";
-import wishList from '../../models/wishList/wishlist-model.js'
+import wishList from "../../models/wishList/wishlist-model.js";
 import Order from "../../models/order/order-model.js";
 
 export const getAllProductsWithFilters = expressAsyncHandler(
@@ -26,51 +26,70 @@ export const getAllProductsWithFilters = expressAsyncHandler(
     // Step 1: Match basic filters (isActive, price range, etc.)
     pipeline.push({
       $match: {
-        deletedAt: { $exists: false }, 
+        deletedAt: { $exists: false },
         isActive: true,
-        salePrice: { $gte: Number(minPrice), $lte: Number(maxPrice) }, 
+        salePrice: { $gte: Number(minPrice), $lte: Number(maxPrice) },
       },
     });
 
     // Step 2: Populate category and check if the category is active
-pipeline.push({
-  $lookup: {
-    from: "categories",
-    let: { categoryId: "$category" },
-    pipeline: [
-      { $match: { $expr: { $and: [{ $eq: ["$_id", "$$categoryId"] }, { $eq: ["$isActive", true] }] } } },
-    ],
-    as: "category",
-  },
-});
+    pipeline.push({
+      $lookup: {
+        from: "categories",
+        let: { categoryId: "$category" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$_id", "$$categoryId"] },
+                  { $eq: ["$isActive", true] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "category",
+      },
+    });
 
-// Step 3: Populate brand and check if the brand is active
-pipeline.push({
-  $lookup: {
-    from: "brands",
-    let: { brandId: "$brand" },
-    pipeline: [
-      { $match: { $expr: { $and: [{ $eq: ["$_id", "$$brandId"] }, { $eq: ["$isActive", true] }] } } },
-    ],
-    as: "brand",
-  },
-});
-    
- // Step 4: Populate offer
- pipeline.push({
-  $lookup: {
-    from: "offers",
-    localField: "offer",
-    foreignField: "_id",
-    as: "offer",
-  },
-});
+    // Step 3: Populate brand and check if the brand is active
+    pipeline.push({
+      $lookup: {
+        from: "brands",
+        let: { brandId: "$brand" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$_id", "$$brandId"] },
+                  { $eq: ["$isActive", true] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "brand",
+      },
+    });
 
-// Step 5: Unwind category and brand
-pipeline.push({ $unwind: "$category" });
-pipeline.push({ $unwind: "$brand" });
-pipeline.push({ $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } });
+    // Step 4: Populate offer
+    pipeline.push({
+      $lookup: {
+        from: "offers",
+        localField: "offer",
+        foreignField: "_id",
+        as: "offer",
+      },
+    });
 
+    // Step 5: Unwind category and brand
+    pipeline.push({ $unwind: "$category" });
+    pipeline.push({ $unwind: "$brand" });
+    pipeline.push({
+      $unwind: { path: "$offer", preserveNullAndEmptyArrays: true },
+    });
 
     // Step 5: Apply search filters if provided
     // if (search) {
@@ -87,7 +106,7 @@ pipeline.push({ $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } })
     if (search) {
       // Split the search string into individual words
       const keywords = search.split("").filter(Boolean); // Remove empty strings
-    
+
       // Create $or conditions for each keyword
       const orConditions = keywords.map((keyword) => ({
         $or: [
@@ -96,14 +115,13 @@ pipeline.push({ $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } })
           { "brand.brandName": { $regex: keyword, $options: "i" } },
         ],
       }));
-    
+
       pipeline.push({
         $match: {
           $and: orConditions,
         },
       });
     }
-    
 
     // Step 6: Filter by selected brands
     if (selectedBrands) {
@@ -129,8 +147,10 @@ pipeline.push({ $unwind: { path: "$offer", preserveNullAndEmptyArrays: true } })
     const totalCountPipeline = [...pipeline, { $count: "totalCount" }];
     const totalCountResult = await Products.aggregate(totalCountPipeline);
 
-    const totalCount = totalCountResult.length ? totalCountResult[0].totalCount : 0;
-console.log(totalCount)
+    const totalCount = totalCountResult.length
+      ? totalCountResult[0].totalCount
+      : 0;
+    console.log(totalCount);
     // Step 8: Apply pagination (skip and limit)
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: Number(limit) });
@@ -215,12 +235,15 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
     .populate({
       path: "brand",
       match: { isActive: true }, // Ensure the brand is active
-    }).populate('offer');
+    })
+    .populate("offer");
 
   // If no product found or the category/brand is not active
   if (!product || !product.category || !product.brand) {
     res.status(404);
-    throw new Error("Product not found or associated category/brand is inactive");
+    throw new Error(
+      "Product not found or associated category/brand is inactive"
+    );
   }
 
   // Fetch related products from the same category (up to 5)
@@ -269,9 +292,8 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
     { $limit: 5 }, // Limit to 5 related products
   ]);
 
-
-   // If no related products are found, fetch fallback products from other categories
-   if (!relatedProducts.length) {
+  // If no related products are found, fetch fallback products from other categories
+  if (!relatedProducts.length) {
     relatedProducts = await Products.aggregate([
       {
         $match: {
@@ -316,7 +338,6 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
       { $limit: 5 }, // Limit to 5 fallback products
     ]);
   }
- 
 
   res.status(200).json({
     message: "Product retrieved successfully",
@@ -325,9 +346,7 @@ export const getProductById = expressAsyncHandler(async (req, res) => {
   });
 });
 
-
 ////----------------------------- Get new arrivals--------------------
-
 
 export const getNewArrivals = expressAsyncHandler(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
@@ -377,17 +396,25 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     { $unwind: "$productDetails" },
     { $replaceRoot: { newRoot: "$productDetails" } },
   ]);
-console.log(mostWishlistedProducts.length,'iiiiiiiiiiiiiiiiiiiiiiiiii')
+  console.log(
+    mostWishlistedProducts?.[0]?.productName,
+    "iiiiiiiiiiiiiiiiiiiiiiiiii"
+  );
   // If no wishlisted products, take two from new arrivals
-  if (!mostWishlistedProducts.length<2) {
+  if (mostWishlistedProducts.length < 2) {
     mostWishlistedProducts = activeProducts.slice(0, 2);
   }
 
   // Get the two most delivered products
   let mostDeliveredProducts = await Order.aggregate([
     { $unwind: "$items" },
-    { $match: { "items.status": "Delivered" } },
-    { $group: { _id: "$items.productId", count: { $sum: 1 } } },
+    {
+      $match: {
+       
+        "items.status": "Delivered",
+      },
+    },
+    { $group: { _id: "$items.productId", count: { $sum: "$items.quantity" } } },
     { $sort: { count: -1 } },
     { $limit: 2 },
     {
@@ -401,25 +428,32 @@ console.log(mostWishlistedProducts.length,'iiiiiiiiiiiiiiiiiiiiiiiiii')
     { $unwind: "$productDetails" },
     { $replaceRoot: { newRoot: "$productDetails" } },
   ]);
-  console.log(mostDeliveredProducts.length,'kkkkkkkkkkkkkkkkkkkkkkkk')
+  console.log(
+    mostDeliveredProducts?.[0]?.productName,
+    "kkkkkkkkkkkkkkkkkkkkkkkk"
+  );
   // If no delivered products, take two from new arrivals
-  if (!mostDeliveredProducts.length<2) {
-
+  if (mostDeliveredProducts.length < 2) {
     mostDeliveredProducts = activeProducts.slice(2, 4);
   }
 
+  console.log(
+    activeProducts?.[0]?.productName,
+    mostWishlistedProducts?.[0]?.productName,
+    mostDeliveredProducts?.[0]?.productName,
+    "jjjjjjjjjjjjjj"
+  );
   // Return the response with new arrivals, most wishlisted, and most delivered products
   res.status(200).json({
-    message: "New arrivals, most wishlisted, and most delivered products retrieved successfully",
+    message:
+      "New arrivals, most wishlisted, and most delivered products retrieved successfully",
     newArrivals: activeProducts,
-    mostWishlisted: mostWishlistedProducts,
+    mostLoved: mostWishlistedProducts,
     mostDelivered: mostDeliveredProducts,
     page: Number(page),
     limit: Number(limit),
   });
 });
-
-
 
 // Get products by category with pagination
 export const getProductsByCategory = expressAsyncHandler(async (req, res) => {
@@ -444,11 +478,11 @@ export const getProductsByCategory = expressAsyncHandler(async (req, res) => {
     .populate({
       path: "brand",
       match: { isActive: true },
-    }).populate("offer");
+    })
+    .populate("offer");
 
-  const activeProducts = products.filter(
-    (product) => product.category && product.brand
-  )||[];
+  const activeProducts =
+    products.filter((product) => product.category && product.brand) || [];
 
   if (!activeProducts.length) {
     res.status(404);
