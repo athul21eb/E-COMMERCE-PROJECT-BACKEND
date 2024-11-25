@@ -222,17 +222,21 @@ const { orders, totalOrders } = await getSalesReport(res, startDate, endDate, pe
 
 
 
-//// -------------------------------route => PATCH/v1/admin/orders/salesReport----------------------------------------------
+//// -------------------------------route => PATCH/v1/admin/orders/salesReport-download----------------------------------------------
 ///* @desc   saleReport 
 ///? @access Private
 
 const generateSaleReportForDownload = expressAsyncHandler(async (req, res) => {
   
-  
+  const {period,startDate,endDate} = req.query;
 
-  
+  if ((!startDate || !endDate) && !period) {
+    res.status(400);
+    throw new Error("Either startDate, endDate, or period must be provided.");
+  }
+
   // Generate the sales report with pagination
-const salesReport = await getFullSalesReport(res);  // Send response
+const salesReport = await getFullSalesReport(res,period,startDate,endDate);  // Send response
     res.status(200).json({
       message: "Sales report generated successfully",
       salesReport

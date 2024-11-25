@@ -2,31 +2,55 @@ import expressAsyncHandler from "express-async-handler";
 import Order from "../../../models/order/order-model.js";
 import Products from "../../../models/products/products-model.js";
 import UserModel from "../../../models/user/user-model.js";
-import constructGraphData from '../../../utils/helper/constructGraphData.js'
-
+import constructGraphData from "../../../utils/helper/constructGraphData.js";
+import moment from "moment";
 
 export const getDashboardData = expressAsyncHandler(async (req, res) => {
   const { filter = "day", startDate, endDate } = req.query;
 
   // Define the date range filter based on query parameters
-  let dateFilter = {};
-  if (filter === "day") {
-    const today = new Date();
+let dateFilter = {};
+
+switch (filter) {
+  case "day":
     dateFilter.orderDate = {
-      $gte: new Date(today.setHours(0, 0, 0, 0)),
-      $lt: new Date(today.setHours(23, 59, 59, 999)),
+      $gte: moment().startOf("day").toDate(),
+      $lt: moment().endOf("day").toDate(),
     };
-  } else if (filter === "month") {
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-    dateFilter.orderDate = { $gte: startOfMonth, $lt: endOfMonth };
-  } else if (filter === "year") {
-    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const endOfYear = new Date(new Date().getFullYear() + 1, 0, 0);
-    dateFilter.orderDate = { $gte: startOfYear, $lt: endOfYear };
-  } else if (startDate && endDate) {
-    dateFilter.orderDate = { $gte: new Date(startDate), $lte: new Date(endDate) };
-  }
+    break;
+
+  case "month":
+    dateFilter.orderDate = {
+      $gte: moment().startOf("month").toDate(),
+      $lt: moment().endOf("month").toDate(),
+    };
+    break;
+
+  case "year":
+    dateFilter.orderDate = {
+      $gte: moment().startOf("year").toDate(),
+      $lt: moment().endOf("year").toDate(),
+    };
+    break;
+
+  case "all":
+    dateFilter.orderDate = {
+      $lt: moment().toDate(),
+    };
+    break;
+
+  default:
+    if (startDate && endDate) {
+      dateFilter.orderDate = {
+        $gte: moment(startDate).toDate(),
+        $lte: moment(endDate).toDate(),
+      };
+    }else{
+      res.status(400);
+      throw new Error("wrong filter is entered")
+    }
+    break;
+}
 
   console.log(dateFilter);
   try {
@@ -37,16 +61,26 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
 
     // Fetch Total Orders
     const totalOrders = await Order.countDocuments({
-      orderStatus:{$ne:"Initiated"},
+      orderStatus: { $nin: ["Initiated", "Failed"]},
       orderDate: dateFilter.orderDate,
     });
 
     // Fetch Total Revenue
     const totalRevenueResult = await Order.aggregate([
-      { $match: { "payment.status":"Success", ...dateFilter} },
-      { $group: { _id: null, totalRevenue: { $sum: "$billAmount" } } },
+      { $match: { "payment.status": "Success", ...dateFilter } },
+      {
+        $group: {
+          _id: null,
+          totalBillAmount: { $sum: "$billAmount" },totalRefund: { $sum: "$refundedAmount" },
+        },
+      },
     ]);
-    const totalRevenue = totalRevenueResult[0]?.totalRevenue || 0;
+    const totalBillAmount = totalRevenueResult[0]?.totalBillAmount || 0;
+    const totalRefund = totalRevenueResult[0]?.totalRefund || 0;
+
+    const totalRevenue = totalBillAmount - totalRefund || 0;
+
+    console.log(totalRevenueResult);
 
     // Fetch Total Products
     const totalProducts = await Products.countDocuments({
@@ -55,8 +89,8 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
 
     // Fetch Top Brands by Items Sold
     const topBrands = await Order.aggregate([
-      { $match: {orderStatus:{$ne:"Initiated"},...dateFilter} }, 
-       { $unwind: "$items" }, // Unwind items
+      { $match: { orderStatus: { $nin: ["Initiated", "Failed"]}, ...dateFilter } },
+      { $unwind: "$items" }, // Unwind items
       {
         $lookup: {
           from: "products", // Link to Products collection
@@ -87,9 +121,8 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
       { $limit: 10 },
     ]);
 
-
     const topCategories = await Order.aggregate([
-      { $match: { orderStatus: { $ne: "Initiated" }, ...dateFilter } }, // Filter orders
+      { $match: { orderStatus: { $nin: ["Initiated", "Failed"]}, ...dateFilter } }, // Filter orders
       { $unwind: "$items" }, // Unwind items array
       {
         $lookup: {
@@ -113,7 +146,9 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
         $group: {
           _id: "$categoryDetails._id",
           categoryName: { $first: "$categoryDetails.categoryName" },
-          categoryDescription: { $first: "$categoryDetails.categoryDescription" },
+          categoryDescription: {
+            $first: "$categoryDetails.categoryDescription",
+          },
           totalSold: { $sum: "$items.quantity" }, // Sum up quantities
         },
       },
@@ -123,7 +158,7 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
 
     // Fetch Top 10 Products by Sales
     const topProducts = await Order.aggregate([
-      { $match: {orderStatus:{$ne:"Initiated"},...dateFilter} },  // Match orders within the date range
+      { $match: { orderStatus: { $nin: ["Initiated", "Failed"]}, ...dateFilter } }, // Match orders within the date range
       { $unwind: "$items" },
       {
         $group: {
@@ -153,7 +188,7 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
     ]);
 
     const itemStatusCounts = await Order.aggregate([
-      { $match: {orderStatus:{$ne:"Initiated"},...dateFilter} }, 
+      { $match: { orderStatus: { $nin: ["Initiated", "Failed"]}, ...dateFilter } },
       { $unwind: "$items" }, // Flatten the items array
       {
         $group: {
@@ -163,7 +198,7 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
       },
       { $sort: { count: -1 } }, // Sort by count descending
     ]);
-  
+
     // Format the data for the pie chart
     const pieData = itemStatusCounts.map((status) => ({
       status: status._id,
@@ -178,15 +213,12 @@ export const getDashboardData = expressAsyncHandler(async (req, res) => {
       topCategories,
       topBrands,
       topProducts,
-      pieData
+      pieData,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
-
-
-
 
 export const getBarGraphData = expressAsyncHandler(async (req, res) => {
   const { period = "monthly" } = req.query;
@@ -198,12 +230,10 @@ export const getBarGraphData = expressAsyncHandler(async (req, res) => {
     groupBy = { month: { $month: "$orderDate" } }; // Group by month
   }
 
-
-  
   // Fetch total revenue grouped by period
   const revenueData = await Order.aggregate([
-    { $match: { "payment.status":"Success"} },
-    { $group: { _id: groupBy, revenue: { $sum: "$billAmount" } } },
+    { $match: { "payment.status": "Success" } },
+    { $group: { _id: groupBy,   totalBillAmount: { $sum: "$billAmount" },totalRefund: { $sum: "$refundedAmount" },} },
     { $sort: { "_id.month": 1, "_id.day": 1 } }, // Ensure sorting by time
   ]);
 
@@ -212,20 +242,18 @@ export const getBarGraphData = expressAsyncHandler(async (req, res) => {
     period === "weekly" ? "week" : "month",
     revenueData.map((item) => ({
       ...(item._id || {}),
-      revenue: item.revenue,
+      revenue: item.totalBillAmount-item.totalRefund,
     }))
   );
 
   res.status(200).json(graphData);
 });
 
-
 export const getPieChartData = expressAsyncHandler(async (req, res) => {
   // Fetch order status counts
   // Aggregate item status counts
 
   const itemStatusCounts = await Order.aggregate([
-  
     { $unwind: "$items" }, // Flatten the items array
     {
       $group: {
@@ -243,4 +271,3 @@ export const getPieChartData = expressAsyncHandler(async (req, res) => {
   }));
   res.status(200).json(pieData);
 });
-

@@ -379,8 +379,8 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     throw new Error("No new arrivals found");
   }
 
-  // Get the two most wishlisted products
-  let mostWishlistedProducts = await wishList.aggregate([
+  // Get the two most wishlist products
+  let mostWishlistProducts = await wishList.aggregate([
     { $unwind: "$products" },
     { $group: { _id: "$products", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
@@ -396,13 +396,10 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     { $unwind: "$productDetails" },
     { $replaceRoot: { newRoot: "$productDetails" } },
   ]);
-  console.log(
-    mostWishlistedProducts?.[0]?.productName,
-    "iiiiiiiiiiiiiiiiiiiiiiiiii"
-  );
-  // If no wishlisted products, take two from new arrivals
-  if (mostWishlistedProducts.length < 2) {
-    mostWishlistedProducts = activeProducts.slice(0, 2);
+
+  // If no wishlist products, take two from new arrivals
+  if (mostWishlistProducts.length < 2) {
+    mostWishlistProducts = activeProducts.slice(0, 2);
   }
 
   // Get the two most delivered products
@@ -436,19 +433,12 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
   if (mostDeliveredProducts.length < 2) {
     mostDeliveredProducts = activeProducts.slice(2, 4);
   }
-
-  console.log(
-    activeProducts?.[0]?.productName,
-    mostWishlistedProducts?.[0]?.productName,
-    mostDeliveredProducts?.[0]?.productName,
-    "jjjjjjjjjjjjjj"
-  );
-  // Return the response with new arrivals, most wishlisted, and most delivered products
+  // Return the response with new arrivals, most wishlist, and most delivered products
   res.status(200).json({
     message:
-      "New arrivals, most wishlisted, and most delivered products retrieved successfully",
+      "New arrivals, most wishlist, and most delivered products retrieved successfully",
     newArrivals: activeProducts,
-    mostLoved: mostWishlistedProducts,
+    mostLoved: mostWishlistProducts,
     mostDelivered: mostDeliveredProducts,
     page: Number(page),
     limit: Number(limit),

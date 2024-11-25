@@ -115,6 +115,7 @@ const orderSchema = new Schema(
     },
     orderDate: { type: Date, default: Date.now },
     appliedCouponAmount: {type:Number,default:0},
+    refundedAmount:{type:Number,default:0},
     couponDetails:{
       code:String,
       maxDiscountAmount:Number,

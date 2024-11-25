@@ -1,7 +1,14 @@
 import moment from "moment";
 import Order from "../../models/order/order-model.js";
 
-const getPaginatedSalesReport = async (res, startDate, endDate, period, page = 1, limit = 10) => {
+const getPaginatedSalesReport = async (
+  res,
+  startDate,
+  endDate,
+  period,
+  page = 1,
+  limit = 10
+) => {
   let start, end;
 
   // Define the start and end dates based on the period or the provided dates
@@ -17,6 +24,9 @@ const getPaginatedSalesReport = async (res, startDate, endDate, period, page = 1
   } else if (period === "year") {
     start = moment().startOf("year");
     end = moment().endOf("year");
+  } else if (period === "all") {
+    start = null; // No start date restriction
+    end = null; // No end date restriction
   } else if (startDate && endDate) {
     start = moment(startDate).startOf("day");
     end = moment(endDate).endOf("day");
@@ -28,22 +38,24 @@ const getPaginatedSalesReport = async (res, startDate, endDate, period, page = 1
   // Calculate the number of items to skip based on page and limit
   const skip = (page - 1) * limit;
 
+    // Build the query
+    const query = { orderStatus: { $nin: ["Initiated", "Failed"] } };
+
+    if (start && end) {
+      query.createdAt = { $gte: start.toDate(), $lte: end.toDate() };
+    }
+  
   // Fetch the total count of matching orders
-  const totalOrders = await Order.countDocuments({
-    createdAt: { $gte: start.toDate(), $lte: end.toDate() },
-    orderStatus: { $nin: ["Initiated", "Failed"] },
-  });
+  const totalOrders = await Order.countDocuments(query);
 
   // Fetch paginated orders
   const orders = await Order.find(
-    {
-      createdAt: { $gte: start.toDate(), $lte: end.toDate() },
-      orderStatus: { $nin: ["Initiated", "Failed"] },
-    },
+    query,
     {
       orderId: 1,
       billAmount: 1,
       appliedCouponAmount: 1,
+      refundedAmount: 1,
       "items.appliedOfferAmount": 1,
       "payment.method": 1,
       "payment.status": 1,
@@ -69,14 +81,44 @@ const getPaginatedSalesReport = async (res, startDate, endDate, period, page = 1
 
 export default getPaginatedSalesReport;
 
+////----------------------------------not paginated for pdf and xlsx----------------------------
+export const getFullSalesReport = async (res, period, startDate, endDate) => {
+  let start, end;
 
+  // Define the start and end dates based on the period or the provided dates
+  if (period === "day") {
+    start = moment().startOf("day");
+    end = moment().endOf("day");
+  } else if (period === "week") {
+    start = moment().startOf("week");
+    end = moment().endOf("week");
+  } else if (period === "month") {
+    start = moment().startOf("month");
+    end = moment().endOf("month");
+  } else if (period === "year") {
+    start = moment().startOf("year");
+    end = moment().endOf("year");
+  } else if (period === "all") {
+    start = null; // No start date restriction
+    end = null; // No end date restriction
+  } else if (startDate && endDate) {
+    start = moment(startDate).startOf("day");
+    end = moment(endDate).endOf("day");
+  } else {
+    res.status(400);
+    throw new Error("Invalid date range or period");
+  }
 
-////----------------------------------for pdf and xlsx----------------------------
-export const getFullSalesReport = async (res) => {
-  // Fetch all orders for metrics calculation
-  const allOrders = await Order.find({
-    orderStatus: { $nin: ["Initiated", "Failed"] },
-  });
+  // Build the query
+  const query = { orderStatus: { $nin: ["Initiated", "Failed"] } };
+
+  if (start && end) {
+    query.createdAt = { $gte: start.toDate(), $lte: end.toDate() };
+  }
+
+  // Fetch orders
+  const allOrders = await Order.find(query);
+
 
   // If no orders are found
   if (allOrders.length === 0) {
@@ -94,6 +136,10 @@ export const getFullSalesReport = async (res) => {
     (acc, order) => acc + (order.appliedCouponAmount || 0),
     0
   );
+  const overallRefundAmount = allOrders.reduce(
+    (acc, order) => acc + (order.refundedAmount || 0),
+    0
+  );
   const totalDiscountOnMRP = allOrders.reduce(
     (acc, order) =>
       acc +
@@ -109,10 +155,8 @@ export const getFullSalesReport = async (res) => {
     overallOrderAmount,
     overallDiscount,
     totalDiscountOnMRP,
+    overallRefundAmount,
     orders: allOrders,
     totalOrders: overallSalesCount, // Total orders
   };
 };
-
-
-
