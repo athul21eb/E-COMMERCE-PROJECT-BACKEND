@@ -10,35 +10,34 @@ const addToWishlist = expressAsyncHandler(async (req, res) => {
   const { productId } = req.body;
   const userId = req.user.id;
 
- 
-    // Validation
-    if (!productId) {
+  // Validation
+  if (!productId) {
+    res.status(400);
+    throw new Error("Please provide a product ID");
+  }
+
+  // Find or create wishlist
+  let wishlist = await Wishlist.findOne({ userId });
+  if (!wishlist) {
+    wishlist = await Wishlist.create({
+      userId,
+      products: [productId],
+    });
+  } else {
+    if (wishlist.products.includes(productId)) {
       res.status(400);
-      throw new Error("Please provide a product ID");
+      throw new Error("Product already in wishlist");
     }
+    wishlist.products.push(productId);
+  }
 
-   
+  await wishlist.save();
+  await wishlist.populate({
+    path: "products",
+    populate: [{ path: "offer" }, { path: "brand" }, { path: "category" }],
+  });
 
-    // Find or create wishlist
-    let wishlist = await Wishlist.findOne({ userId });
-    if (!wishlist) {
-      wishlist = await Wishlist.create({
-        userId,
-        products: [productId],
-      });
-    } else {
-      if (wishlist.products.includes(productId)) {
-        res.status(400);
-        throw new Error("Product already in wishlist");
-      }
-      wishlist.products.push(productId);
-    }
-
-    await wishlist.save();
-    await wishlist.populate("products");
-
-    res.status(200).json({ message: "Product added to wishlist", wishlist });
-  
+  res.status(200).json({ message: "Product added to wishlist", wishlist });
 });
 
 ////---------------- @desc   Remove product from wishlist
@@ -47,21 +46,26 @@ const addToWishlist = expressAsyncHandler(async (req, res) => {
 const removeFromWishlist = expressAsyncHandler(async (req, res) => {
   const { productId } = req.params;
   const userId = req.user.id;
-
+  
   try {
     // Remove product from wishlist
     const wishlist = await Wishlist.findOneAndUpdate(
       { userId },
       { $pull: { products: productId } },
       { new: true }
-    ).populate("products");
+    ).populate({
+      path: "products",
+      populate: [{ path: "offer" }, { path: "brand" }, { path: "category" }],
+    });
 
     if (!wishlist) {
       res.status(404);
       throw new Error("Wishlist not found");
     }
 
-    res.status(200).json({ message: "Product removed from wishlist", wishlist });
+    res
+      .status(200)
+      .json({ message: "Product removed from wishlist", wishlist });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -74,14 +78,19 @@ const getWishList = expressAsyncHandler(async (req, res) => {
   const userId = req.user.id;
 
   // Find wishlist by user ID
-  const wishlist = await Wishlist.findOne({ userId }).populate({path:"products",populate:{path:"offer"}})
+  const wishlist = await Wishlist.findOne({ userId }).populate({
+    path: "products",
+    populate: [{ path: "offer" }, { path: "brand" }, { path: "category" }],
+  });
 
   if (!wishlist) {
     res.status(404);
     throw new Error("Wishlist not found");
   }
 
-  res.status(200).json({ message: "Wishlist retrieved successfully", wishlist });
+  res
+    .status(200)
+    .json({ message: "Wishlist retrieved successfully", wishlist });
 });
 
 ////------------------------ @desc   Move product from wishlist to cart
@@ -113,7 +122,9 @@ const moveToBag = expressAsyncHandler(async (req, res) => {
 
   if (sizeStock.stock < quantity) {
     res.status(400);
-    throw new Error(`Insufficient stock for size ${size}. Available stock: ${sizeStock.stock}`);
+    throw new Error(
+      `Insufficient stock for size ${size}. Available stock: ${sizeStock.stock}`
+    );
   }
 
   // Remove product from wishlist
@@ -166,7 +177,4 @@ const moveToBag = expressAsyncHandler(async (req, res) => {
   });
 });
 
-
-export { addToWishlist, removeFromWishlist, getWishList ,moveToBag };
-
-
+export { addToWishlist, removeFromWishlist, getWishList, moveToBag };

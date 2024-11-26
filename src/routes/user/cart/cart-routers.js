@@ -3,7 +3,7 @@ import {
   addToCart,
   getCartWithStockAdjustment,
   removeToCart,
-  updateToCart,
+  updateOrMergeToCart,
   clearCart,
 } from "../../../controllers/user/cart/cart-controllers.js";
 
@@ -21,7 +21,7 @@ CartRouter.get("/get-cart", getCartWithStockAdjustment);
 CartRouter.delete("/remove-from-cart/:itemId", removeToCart);
 
 // Route to update a product's quantity or size in the cart
-CartRouter.put("/update-cart/:itemId", updateToCart);
+CartRouter.put("/update-cart/:itemId", updateOrMergeToCart);
 
 // Route to clear the cart
 CartRouter.delete("/clear-cart", clearCart);

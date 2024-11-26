@@ -103,7 +103,11 @@ const addToCart = expressAsyncHandler(async (req, res) => {
 
   await cart.populate({
     path: "items.productId",
-    populate: { path: "brand" },
+    populate: [
+      { path: "offer" },
+      { path: "brand" }, // Populate the 'brand' field within 'productId'
+      { path: "category" }, // Assuming you have an offer field you want to populate
+    ],
   });
   res.status(200).json({ message: "Product added to Bag", cart });
 });
@@ -335,14 +339,13 @@ const removeToCart = expressAsyncHandler(async (req, res) => {
   res.status(200).json({ message: "Product removed from Bag", cart });
 });
 
-// -------------------------------route => PUT/v1/cart/update-item/:productId----------------------------------------------
+//// -------------------------------route => PUT/v1/cart/update-item/:productId----------------------------------------------
 ///* @desc   Update product quantity/size in cart
 ///? @access Private
 
-const updateToCart = expressAsyncHandler(async (req, res) => {
+const updateOrMergeToCart = expressAsyncHandler(async (req, res) => {
   const { itemId } = req.params; // Using itemId instead of productId
   const { quantity, size } = req.body;
-  console.log(itemId, quantity, size, "id");
 
   // Ensure that at least one of quantity or size is provided
   if (quantity === undefined && !size) {
@@ -363,32 +366,57 @@ const updateToCart = expressAsyncHandler(async (req, res) => {
   const itemIndex = cart.items.findIndex(
     (item) => item._id.toString() === itemId
   );
-  console.log(itemIndex, "index");
+
   if (itemIndex > -1) {
-    // Update item quantity and size if found
-    if (quantity !== undefined) {
-      cart.items[itemIndex].quantity = Math.max(1, Number(quantity));
+    const item = cart.items[itemIndex];
+    const product = await Product.findById(item.productId);
+
+    if (!product) {
+      res.status(404);
+      throw new Error("Product not found");
     }
-    if (size) {
-      const productId = cart.items[itemIndex].productId.toString(); // Get the productId to check for existing sizes
 
-      cart.items[itemIndex].size = size;
+    // Validate stock for the given size
+    const updatedSize = size; // Use provided size or retain existing size
+    const sizeStock = product.stock.find((stock) => stock.size === updatedSize);
 
-      // Check if there's already an item with the new size, and merge or adjust accordingly
-      const existingSizeIndex = cart.items.findIndex(
-        (item) =>
-          item.productId.toHexString() === productId &&
-          item.size === size &&
-          item._id.toHexString() !== itemId
+    if (!sizeStock) {
+      res.status(400);
+      throw new Error(`Size ${updatedSize} not available`);
+    }
+
+    let updatedQuantity = Number(quantity);
+
+    if (sizeStock.stock < updatedQuantity) {
+      console.log(updatedQuantity,sizeStock.stock)
+      updatedQuantity =sizeStock.stock ;
+    }
+
+    // Update item quantity and size
+    item.quantity = Math.max(1, updatedQuantity);
+    item.size = updatedSize;
+
+    // Check if there's already an item with the updated size, and merge if necessary
+    const existingSizeIndex = cart.items.findIndex(
+      (cartItem) =>
+        cartItem.productId.toString() === item.productId.toString() &&
+        cartItem.size === updatedSize &&
+        cartItem._id.toString() !== itemId
+    );
+
+ 
+
+    if (existingSizeIndex > -1) {
+      // Merge quantities and remove the duplicate item
+      cart.items[existingSizeIndex].quantity = Math.min(
+        5,
+        cart.items[existingSizeIndex].quantity + item.quantity,sizeStock.stock 
       );
 
-      if (existingSizeIndex > -1) {
-        // If an item with the new size already exists, sum quantities and remove duplicate
-        cart.items[existingSizeIndex].quantity +=
-          cart.items[itemIndex].quantity;
-        cart.items.splice(itemIndex, 1); // Remove the old item with the previous size
-      }
+      cart.items.splice(itemIndex, 1);
     }
+
+    
   } else {
     // If the item wasn't found, return an error
     res.status(404);
@@ -399,54 +427,37 @@ const updateToCart = expressAsyncHandler(async (req, res) => {
   await cart.save();
 
   // Populate the updated cart to include product and brand details
-  // Populate appliedCoupon first
   await cart.populate({
     path: "appliedCoupon",
     select: "code discount expirationDate maxDiscountAmount minPurchaseAmount",
   });
-
-  // Then populate items.productId with offer, brand, and category
   await cart.populate({
     path: "items.productId",
-    populate: [
-      { path: "offer" },
-      { path: "brand" }, // Populate 'brand' field
-      { path: "category" }, // Populate 'category' field
-    ],
+    populate: [{ path: "offer" }, { path: "brand" }, { path: "category" }],
   });
 
   const cartDetails = calculateCartTotals(cart);
 
-  // Check if the applied coupon is valid based on the cart total and the expiration date
+  // Validate coupon
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
 
-    // Check if the cart total is below the minimum purchase amount or coupon is expired
     if (
       cartDetails.cartTotal < minPurchaseAmount ||
       new Date(expirationDate) < new Date()
     ) {
-      cart.appliedCoupon = null; // Remove the coupon
-
-      // Save the updated cart
+      cart.appliedCoupon = null;
       await cart.save();
 
-      // Populate the updated cart to include product and brand details
-      // Populate appliedCoupon first
+      // Re-populate after removing coupon
       await cart.populate({
         path: "appliedCoupon",
         select:
           "code discount expirationDate maxDiscountAmount minPurchaseAmount",
       });
-
-      // Then populate items.productId with offer, brand, and category
       await cart.populate({
         path: "items.productId",
-        populate: [
-          { path: "offer" },
-          { path: "brand" }, // Populate 'brand' field
-          { path: "category" }, // Populate 'category' field
-        ],
+        populate: [{ path: "offer" }, { path: "brand" }, { path: "category" }],
       });
     }
   }
@@ -455,7 +466,9 @@ const updateToCart = expressAsyncHandler(async (req, res) => {
   res.status(200).json({ message: "Product updated successfully", cart });
 });
 
-// -------------------------------route => DELETE/v1/cart/clear-cart----------------------------------------------
+
+
+//// -------------------------------route => DELETE/v1/cart/clear-cart----------------------------------------------
 ///* @desc   Clear user's cart
 ///? @access Private
 
@@ -480,7 +493,7 @@ const clearCart = expressAsyncHandler(async (req, res) => {
 export {
   addToCart,
   removeToCart,
-  updateToCart,
   clearCart,
   getCartWithStockAdjustment,
+  updateOrMergeToCart,
 };
