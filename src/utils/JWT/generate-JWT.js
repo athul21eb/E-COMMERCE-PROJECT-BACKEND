@@ -37,7 +37,8 @@ export const generateRefreshToken = (res, user) => {
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000,
 
-      sameSite: "strict",
+      sameSite: process.env.NODE_ENV === "development" ? "" : "None",
+      secure: process.env.NODE_ENV === "development" ? false : true,
     });
   } catch (error) {
     console.log(error);

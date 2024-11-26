@@ -11,9 +11,13 @@ const createBanner = expressAsyncHandler(async (req, res) => {
   // Validation
   if (!product || !title || !subTitle || !image) {
     res.status(400);
-    throw new Error("Please fill in all fields");
+    throw new Error("Please fill in all fields(product,title,subTitle,image)");
   }
 
+  if(await BannerModel.findOne({product})){
+    res.status(400);
+    throw new  Error(`this product Banner already created`)
+  }
   // Create new banner
   const createdBanner = await BannerModel.create({ product, title, subTitle, image });
 
@@ -104,7 +108,7 @@ const updateBanner = expressAsyncHandler(async (req, res) => {
 
   if (!bannerId || !product || !title || !subTitle || !image) {
     res.status(400);
-    throw new Error("Please fill in all fields");
+    throw new Error("Please fill in all fields(bannerId,product,title, subTitle,image)");
   }
 
   // Validate ObjectId format
@@ -121,7 +125,8 @@ const updateBanner = expressAsyncHandler(async (req, res) => {
   const updatedBanner = await BannerModel.findByIdAndUpdate(
     bannerId,
     { product, title, subTitle, image },
-    { new: true }
+    { new: true ,runValidators:true},
+    
   ).populate("product");
 
   if (updatedBanner) {

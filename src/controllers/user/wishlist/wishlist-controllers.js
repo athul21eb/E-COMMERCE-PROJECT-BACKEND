@@ -84,7 +84,7 @@ const getWishList = expressAsyncHandler(async (req, res) => {
   res.status(200).json({ message: "Wishlist retrieved successfully", wishlist });
 });
 
-// @desc   Move product from wishlist to cart
+////------------------------ @desc   Move product from wishlist to cart
 // @route  POST /wishlist/move-to-bag
 // @access Private
 const moveToBag = expressAsyncHandler(async (req, res) => {

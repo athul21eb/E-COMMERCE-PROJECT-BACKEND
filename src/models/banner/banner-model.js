@@ -6,6 +6,7 @@ const bannerSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Products",
       required: true,
+      unique:true,
       validate: {
         validator: async function (productId) {
           const product = await mongoose.model("Products").findById(productId);
