@@ -87,7 +87,7 @@ const applyCoupon = expressAsyncHandler(async (req, res) => {
   }
 
   const cartDetails = calculateCartTotals(cart);
-console.log(cartDetails.cartTotal , coupon.minPurchaseAmount)
+
   // Check minimum purchase requirement
   if (cartDetails.cartTotal < coupon.minPurchaseAmount) {
     res.status(400);

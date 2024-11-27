@@ -14,7 +14,7 @@ import Wishlist from "../../../models/wishList/wishlist-model.js";
 const addToCart = expressAsyncHandler(async (req, res) => {
   const { productId, quantity, size } = req.body;
   const userId = req.user.id;
-  console.log(userId);
+ 
 
   // Validation
   if (!productId || !quantity || !size || !userId) {
@@ -76,7 +76,7 @@ const addToCart = expressAsyncHandler(async (req, res) => {
 
   const cartDetails = calculateCartTotals(cart);
 
-  console.log(cartDetails, cart, "bbbbbbbbbbbbbbbbbbbbbbbb");
+ 
   // Check if the applied coupon is valid based on the cart total and the expiration date
   if (cart.appliedCoupon) {
     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
@@ -112,52 +112,7 @@ const addToCart = expressAsyncHandler(async (req, res) => {
   res.status(200).json({ message: "Product added to Bag", cart });
 });
 
-// -------------------------------route => GET/v1/cart/get-cart----------------------------------------------
-/// @desc   Get user's cart
-// @access Private
 
-// const getToCart = expressAsyncHandler(async (req, res) => {
-//   const userId = req.user.id;
-
-//   const cart = await Cart.findOne({ user: userId })
-//     .populate({
-//       path: "appliedCoupon",
-//       select:
-//         "code discount expirationDate maxDiscountAmount minPurchaseAmount",
-//     })
-//     .populate({
-//       path: "items.productId",
-//       populate: [
-//         { path: "offer" },
-//         { path: "brand" }, // Populate the 'brand' field within 'productId'
-//         { path: "category" }, // Assuming you have an offer field you want to populate
-//       ],
-//     });
-
-//    Populate the 'category' field within 'productId'
-//   if (!cart) {
-//     res.status(404);
-//     throw new Error("Cart not found");
-//   }
-
-//   const cartDetails = calculateCartTotals(cart?.items);
-
-//   console.log(cartDetails, cart, "bbbbbbbbbbbbbbbbbbbbbbbb");
-// Check if the applied coupon is valid based on the cart total and the expiration date
-//   if (cart.appliedCoupon) {
-//     const { minPurchaseAmount, expirationDate } = cart.appliedCoupon;
-
-// Check if the cart total is below the minimum purchase amount or coupon is expired
-//     if (
-//       cartDetails.cartTotal < minPurchaseAmount ||
-//       new Date(expirationDate) < new Date()
-//     ) {
-//       cart.appliedCoupon = null; // Remove the coupon
-//     }
-//   }
-
-//   res.status(200).json({ message: "Cart retrieved successfully", cart });
-// });
 
 // -------------------------------route => GET/v1/cart/get-cart----------------------------------------------
 ///* @desc   Get user's cart and adjust item quantity if stock is limited
@@ -315,7 +270,7 @@ const removeToCart = expressAsyncHandler(async (req, res) => {
       ],
     });
 
-  console.log(cart);
+ 
   if (!cart) {
     res.status(404);
     throw new Error("Cart not found");
@@ -388,7 +343,7 @@ const updateOrMergeToCart = expressAsyncHandler(async (req, res) => {
     let updatedQuantity = Number(quantity);
 
     if (sizeStock.stock < updatedQuantity) {
-      console.log(updatedQuantity,sizeStock.stock)
+     
       updatedQuantity =sizeStock.stock ;
     }
 

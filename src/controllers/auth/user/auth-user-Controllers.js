@@ -16,7 +16,7 @@ import Wallet from "../../../models/wallet/wallet-model.js";
 
 const googleSignIn = asyncHandler(async (req, res) => {
   const { email, displayName, photoURL, uid } = req.body;
-  console.log(req.body);
+
   ////validation
   if (!email || !displayName || !uid) {
     res.status(400);
@@ -316,7 +316,7 @@ const signUp = asyncHandler(async (req, res) => {
   const existingEmailUser = await UserModel.findOne({ email });
 
   if (existingEmailUser) {
-    console.log(existingEmailUser);
+   
 
     if (existingEmailUser.googleId) {
       res.status(400);

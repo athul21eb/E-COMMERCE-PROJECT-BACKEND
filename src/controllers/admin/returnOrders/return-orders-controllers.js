@@ -48,7 +48,7 @@ export const ReturnOrderConfirm = expressAsyncHandler(async (req, res) => {
   const { orderId, itemId } = req.params;
   const {status} = req.body;
 
-  console.log(orderId,itemId,status);
+
 
   if (!orderId || !itemId || !status) {
     res.status(400);

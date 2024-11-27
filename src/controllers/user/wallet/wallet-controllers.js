@@ -15,7 +15,7 @@ export const createWallet = expressAsyncHandler(async (req, res) => {
 
   if (existingWallet) {
     res.status(409);
-    console.log(existingWallet)
+  
     throw new Error(
       `Wallet Existed for this user ${existingWallet?.user_id?.firstName}`
     );
@@ -45,7 +45,7 @@ export const addMoneyToWallet = expressAsyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Amount Can Not Be Less than One Rupee");
   }
-console.log()
+
   const wallet = await Wallet.findOne({ user_id: req.user.id });
 
   if (!wallet) {

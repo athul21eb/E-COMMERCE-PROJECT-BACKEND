@@ -34,7 +34,7 @@ export const processRefund = async (order, item, userId,description="refund from
     wallet.balance += refundAmount;
     await wallet.save();
   
-    console.log(`Refunded ${refundAmount} to the user's wallet`);
+    
   };
   
 

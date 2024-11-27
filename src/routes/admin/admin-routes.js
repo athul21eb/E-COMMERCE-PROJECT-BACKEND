@@ -13,49 +13,40 @@ import DashBoardRouter from "./dashboard/dashboard-routes.js";
 const AdminRouter = Router();
 
 //// ------------------------------- Admin category Routes----------------------------------------------
-AdminRouter.use('/categories',categoryRouter);
+AdminRouter.use("/categories", categoryRouter);
 
 //// ------------------------------- Admin brand Routes----------------------------------------------
-AdminRouter.use('/brands',brandRouter);
+AdminRouter.use("/brands", brandRouter);
 
 //// ------------------------------- Admin product Routes----------------------------------------------
 
-
-AdminRouter.use('/products',productRouter);
-
+AdminRouter.use("/products", productRouter);
 
 //// ------------------------------- Admin product Routes----------------------------------------------
 
-
-AdminRouter.use('/customers',customerRouter);
-
-
+AdminRouter.use("/customers", customerRouter);
 
 //// ------------------------------- Admin product Routes----------------------------------------------
 
-
-AdminRouter.use('/orders',orderRouter);
+AdminRouter.use("/orders", orderRouter);
 
 ////-------------------------------------Admin brand Routers--------------------------------
 
-AdminRouter.use('/banners',bannerRouter)
+AdminRouter.use("/banners", bannerRouter);
 
 ////-------------------------------------Admin offer Routers--------------------------------
 
-AdminRouter.use('/offers',offerRouter)
+AdminRouter.use("/offers", offerRouter);
 
 ////-----------------------------------------------Admin coupons Routers----------------------------
 
-AdminRouter.use('/coupons',CouponRouter)
+AdminRouter.use("/coupons", CouponRouter);
 ////-----------------------------------------------admin return order routes-------------------
 
-AdminRouter.use("/return-orders",ReturnOrderRouter);
+AdminRouter.use("/return-orders", ReturnOrderRouter);
 
 ////-----------------------------------------------admin DashBoard routes-------------------
 
-AdminRouter.use("/dashboard",DashBoardRouter);
+AdminRouter.use("/dashboard", DashBoardRouter);
 
-
-
-
-export default AdminRouter
+export default AdminRouter;

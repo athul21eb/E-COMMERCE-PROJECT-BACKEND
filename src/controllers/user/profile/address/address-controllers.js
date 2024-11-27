@@ -53,7 +53,7 @@ const addAddress = expressAsyncHandler(async (req, res) => {
   const userId = req.user.id;
   const {data:newAddress} = req.body;
   
-  console.log(newAddress);
+ 
 
   // Validate address data
   if (

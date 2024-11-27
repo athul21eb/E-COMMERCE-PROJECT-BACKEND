@@ -22,7 +22,7 @@ export const generateAccessToken = (user) => {
 
 export const generateRefreshToken = (res, user) => {
   try {
-    console.log(user);
+   
     const refreshToken = jwt.sign(
       {
         email: user.email,

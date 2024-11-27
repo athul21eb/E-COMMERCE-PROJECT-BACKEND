@@ -63,7 +63,7 @@ export const AdminVerifyJWT = (req, res, next) => {
       next();
     } else {
       res.status(403);
-      console.log("not an admin");
+     
       throw new Error(`You are not an admin`);
     }
   });

@@ -151,7 +151,7 @@ export const getAllProductsWithFilters = expressAsyncHandler(
     const totalCount = totalCountResult.length
       ? totalCountResult[0].totalCount
       : 0;
-    console.log(totalCount);
+  
     // Step 8: Apply pagination (skip and limit)
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: Number(limit) });

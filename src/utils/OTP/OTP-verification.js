@@ -36,7 +36,7 @@ const sendOTP = async (email) => {
     
     const generatedOTP = generateNumericOTP(6);
     
- console.log(generatedOTP);
+
  
     
 
@@ -73,7 +73,7 @@ const sendOTP = async (email) => {
 
     const info = await transporter.sendMail(mailOptions);
 
-    console.log("Message sent: %s", info.messageId);
+   
     // Message sent: <d786aa62-4e0a-070a-47ed-0b0666549519@ethereal.email>
   } catch (error) {
     console.log(error);

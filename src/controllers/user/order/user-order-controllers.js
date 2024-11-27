@@ -492,7 +492,7 @@ export const getOrderData = expressAsyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit) || 10; // Default to 10 orders per page if not provided
     const skip = (page - 1) * limit;
 
-    console.log(userId);
+  
     // Fetch paginated orders for the user
     const orders = await Order.find(
       {
@@ -583,7 +583,7 @@ export const cancelOrderItem = expressAsyncHandler(async (req, res) => {
     throw new Error("Item Can not Cancel due to current status");
   }
 
-  console.log(item);
+
   // Set the status to "Cancelled" and update the cancellation date
   item.status = "Cancelled";
   item.cancelledDate = new Date();
