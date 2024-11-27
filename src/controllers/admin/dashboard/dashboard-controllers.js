@@ -52,7 +52,7 @@ switch (filter) {
     break;
 }
 
-  console.log(dateFilter);
+  
   try {
     // Fetch Total Users
     const totalUsers = await UserModel.countDocuments({
@@ -80,7 +80,7 @@ switch (filter) {
 
     const totalRevenue = totalBillAmount - totalRefund || 0;
 
-    console.log(totalRevenueResult);
+  
 
     // Fetch Total Products
     const totalProducts = await Products.countDocuments({

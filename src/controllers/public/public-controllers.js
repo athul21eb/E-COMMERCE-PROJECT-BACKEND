@@ -5,6 +5,7 @@ import expressAsyncHandler from "express-async-handler";
 import mongoose from "mongoose";
 import wishList from "../../models/wishList/wishlist-model.js";
 import Order from "../../models/order/order-model.js";
+import { BannerModel } from "../../models/banner/banner-model.js";
 
 export const getAllProductsWithFilters = expressAsyncHandler(
   async (req, res) => {
@@ -407,7 +408,6 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     { $unwind: "$items" },
     {
       $match: {
-       
         "items.status": "Delivered",
       },
     },
@@ -425,14 +425,13 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     { $unwind: "$productDetails" },
     { $replaceRoot: { newRoot: "$productDetails" } },
   ]);
-  console.log(
-    mostDeliveredProducts?.[0]?.productName,
-    "kkkkkkkkkkkkkkkkkkkkkkkk"
-  );
+
   // If no delivered products, take two from new arrivals
   if (mostDeliveredProducts.length < 2) {
     mostDeliveredProducts = activeProducts.slice(2, 4);
   }
+
+  const banners = await BannerModel.find({ isActive: true });
   // Return the response with new arrivals, most wishlist, and most delivered products
   res.status(200).json({
     message:
@@ -440,6 +439,7 @@ export const getNewArrivals = expressAsyncHandler(async (req, res) => {
     newArrivals: activeProducts,
     mostLoved: mostWishlistProducts,
     mostDelivered: mostDeliveredProducts,
+    banners: banners && banners.length > 0 ? banners : [],
     page: Number(page),
     limit: Number(limit),
   });

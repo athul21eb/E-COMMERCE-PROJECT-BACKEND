@@ -96,7 +96,7 @@ const updateCustomer = expressAsyncHandler(async (req, res) => {
 
 const updateCustomerIsBlocked = expressAsyncHandler(async (req, res) => {
   const { customerId } = req.body;
-  console.log(customerId, "customer id");
+ 
 
   if (!customerId) {
     res.status(400);
@@ -109,14 +109,13 @@ const updateCustomerIsBlocked = expressAsyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Customer Not Found");
   }
-  console.log(foundCustomer.isBlocked, "customer found id");
+
   const customerData = await CustomerModel.findByIdAndUpdate(
     customerId,
     { $set: { isBlocked: !foundCustomer.isBlocked } }, // Toggles the current value
     { new: true }
   );
-  console.log(customerData.isBlocked, "update id");
-  console.log(customerData);
+ 
   if (customerData) {
     res.json({
       message: `${customerData.firstName} ${

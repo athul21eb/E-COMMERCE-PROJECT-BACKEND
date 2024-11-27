@@ -28,7 +28,7 @@ const getAllOrderData = expressAsyncHandler(async (req, res) => {
           { path: "category" }, // Assuming your Product model has a category field
         ],
       })
-      .sort({ createdAt: -1 })
+      .sort({ orderDate: -1 })
       .skip(skip)
       .limit(limit);
 
