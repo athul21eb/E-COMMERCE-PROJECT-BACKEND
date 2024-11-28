@@ -123,6 +123,16 @@ const updateBanner = expressAsyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Invalid banner ID format");
   }
+
+  const foundExistingBanner = await BannerModel.findOne({
+    product: product, // Replace productId with the actual product reference
+  });
+
+  if (foundExistingBanner) {
+    res.status(400);
+    throw new Error("product have already a Banner");
+  }
+
   const foundBanner = await BannerModel.findById(bannerId);
   if (!foundBanner) {
     res.status(404);
