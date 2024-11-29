@@ -25,7 +25,7 @@ app.use(
   cors({
     origin: [
       process.env.DEVELOPMENT_FRONTEND_URL,
-      "",
+    
       process.env.PRODUCTION_FRONTEND_URL,
     ], // Allow requests from this origin
     credentials: true, // Enable sending of cookies with requests
