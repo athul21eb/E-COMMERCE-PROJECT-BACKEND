@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  backend:
+    # Use this if you're building the Dockerfile instead of pulling an image
+    image: athul21eb/fireboots:server # Consider using `backend` instead of `frontend` for clarity
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - .:/app # Mount current directory to `/app` in the container
+    ports:
+      - "5000:5000" # Ensure quotes for better YAML handling
+    command: [ "npm", "start" ] # Override default CMD if necessary
