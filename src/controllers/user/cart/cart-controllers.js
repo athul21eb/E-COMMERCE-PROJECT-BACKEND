@@ -64,11 +64,11 @@ const addToCart = expressAsyncHandler(async (req, res) => {
       items: [{ productId, quantity, size }],
     });
   } else {
-    const existingItem = cart.items.find(
+    let existingItem = cart.items.find(
       (item) => item.productId.toString() === productId && item.size === size
     );
     if (existingItem) {
-      existingItem.quantity += Number(quantity);
+      existingItem.quantity = Math.min(5,existingItem?.quantity+Number(quantity));
     } else {
       cart.items.push({ productId, quantity, size });
     }
@@ -332,7 +332,7 @@ const updateOrMergeToCart = expressAsyncHandler(async (req, res) => {
     }
 
     // Validate stock for the given size
-    const updatedSize = size; // Use provided size or retain existing size
+    const updatedSize = size??item.size; // Use provided size or retain existing size
     const sizeStock = product.stock.find((stock) => stock.size === updatedSize);
 
     if (!sizeStock) {

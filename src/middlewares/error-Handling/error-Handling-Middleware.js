@@ -9,8 +9,7 @@ const notFoundRoute = (req, res, next) => {
 };
 
 const errorHandler = (err, req, res, next) => {
-  
-   if(process.env.NODE_ENV === "development") console.log(err);
+  if (process.env.NODE_ENV === "development") console.log(err);
 
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   let message = err.message || "internal Server Error";
@@ -27,7 +26,7 @@ const errorHandler = (err, req, res, next) => {
 
   if (err.name === "ValidationError") {
     statusCode = 400;
-    message = Object.values(err?.errors).map((errr) => errr?.message);
+    message = Object.values(err?.errors).map((errr) => errr?.message)?.[0];
   }
 
   res.status(statusCode).json({
